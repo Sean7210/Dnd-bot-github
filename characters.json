@@ -1,0 +1,494 @@
+{
+  "688371104053854335": {
+    "character": {
+      "name": "Azrael",
+      "race": "Elfo",
+      "class": "Hechicero",
+      "subclass": "",
+      "background": "Héroe del Pueblo",
+      "alignment": "Caótico Neutral",
+      "skills": [
+        "Trato con animales",
+        "Supervivencia",
+        "Persuasión",
+        "Intuición"
+      ],
+      "languages": [
+        "Común",
+        "Élfico"
+      ],
+      "inventory": [
+        {
+          "nombre": "Ballesta ligera",
+          "cantidad": 1,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Equipo inicial",
+          "descripcion": ""
+        },
+        {
+          "nombre": "Virotes de ballesta",
+          "cantidad": 20,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Equipo inicial",
+          "descripcion": ""
+        },
+        {
+          "nombre": "Foco arcano",
+          "cantidad": 1,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Equipo inicial",
+          "descripcion": ""
+        },
+        {
+          "nombre": "Paquete de explorador",
+          "cantidad": 1,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Equipo inicial",
+          "descripcion": ""
+        },
+        {
+          "nombre": "Dagas",
+          "cantidad": 1,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Equipo inicial",
+          "descripcion": ""
+        },
+        {
+          "nombre": "Herramientas artesanales",
+          "cantidad": 1,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Trasfondo"
+        },
+        {
+          "nombre": "Pala",
+          "cantidad": 1,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Trasfondo"
+        },
+        {
+          "nombre": "Olla de hierro",
+          "cantidad": 1,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Trasfondo"
+        },
+        {
+          "nombre": "Ropa común",
+          "cantidad": 1,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Trasfondo"
+        },
+        {
+          "nombre": "Vale de Herramienta",
+          "cantidad": 1,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Vale",
+          "esVale": true
+        },
+        {
+          "nombre": "Vehículos de tierra",
+          "cantidad": 1,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Trasfondo"
+        }
+      ],
+      "money": {
+        "PC": 0,
+        "PP": 0,
+        "PE": 0,
+        "PO": 10,
+        "PT": 0
+      },
+      "level": 4,
+      "_modoPapel": false,
+      "backstory": "",
+      "_raceCategory": "Común",
+      "rolledStats": {
+        "STR": 15,
+        "DEX": 14,
+        "CON": 14,
+        "INT": 13,
+        "WIS": 15,
+        "CHA": 14
+      },
+      "finalStats": {
+        "STR": 15,
+        "DEX": 16,
+        "CON": 14,
+        "INT": 13,
+        "WIS": 15,
+        "CHA": 14
+      },
+      "stats": {
+        "STR": 15,
+        "DEX": 16,
+        "CON": 14,
+        "INT": 13,
+        "WIS": 15,
+        "CHA": 14
+      },
+      "hpMax": 20,
+      "hpActual": 20,
+      "pendingLevelUp": true,
+      "pendingASI": true,
+      "profBonus": 2
+    },
+    "guildId": "1464422214597083360",
+    "savedAt": "2026-03-21T15:04:53.383Z"
+  },
+  "502684265704849408": {
+    "character": {
+      "level": 3,
+      "name": "Roy",
+      "backstory": "Mataron a mis padres un dragon y quiere venganza",
+      "_raceCategory": "Común",
+      "race": "Gnomo",
+      "class": "Guerrero",
+      "subclass": "Campeón",
+      "background": "Acólito",
+      "alignment": "Legal Bueno ⚖️😇",
+      "rolledStats": {
+        "STR": 12,
+        "DEX": 10,
+        "CON": 9,
+        "INT": 10,
+        "WIS": 11,
+        "CHA": 13
+      },
+      "finalStats": {
+        "STR": 12,
+        "DEX": 10,
+        "CON": 21,
+        "INT": 12,
+        "WIS": 11,
+        "CHA": 13
+      },
+      "stats": {
+        "STR": 12,
+        "DEX": 10,
+        "CON": 21,
+        "INT": 12,
+        "WIS": 11,
+        "CHA": 13
+      },
+      "skills": [
+        "Perspicacia",
+        "Religión",
+        "Acrobacias",
+        "Atletismo"
+      ],
+      "inventory": [
+        {
+          "nombre": "espada",
+          "cantidad": 2,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Recompensa"
+        },
+        {
+          "nombre": "Kit de Ladrón",
+          "cantidad": 1,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Recompensa"
+        },
+        {
+          "nombre": "HUEVO MISTERIOSO",
+          "cantidad": 2,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Recompensa"
+        },
+        {
+          "nombre": "Hacha de Doble Filo del Nórdico",
+          "cantidad": 1,
+          "peso": 1,
+          "precio": 0,
+          "daño": "2d12 cortante",
+          "propiedades": "Pesada, Berserker secundario",
+          "descripcion": "Al caer por debajo de la mitad de tus HP máximos, ganas +2 a ataque y daño y un ataque adicional por acción (sin necesitar la característica de Ataque Extra).",
+          "categoria": "Arma Única",
+          "unica": true,
+          "dorada": false
+        },
+        {
+          "nombre": "Excalibur — La Espada en la Piedra Original",
+          "cantidad": 1,
+          "peso": 1,
+          "precio": 0,
+          "daño": "15d10 radiante",
+          "propiedades": "Solo empuñable por el rey legítimo, Mata tiranos instantáneamente",
+          "descripcion": "La espada real de Arturo Pendragon. Solo puede ser desenvainada por alguien reconocido como liderazgo legítimo (DM arbitrará). Al desenvainar: luz solar en 1 milla durante 1 hora. Contra tiranos, usurpadores o alineamiento Malvado Legal: daño automáticamente máximo y el objetivo hace TS CON CD 26 o cae a 0 HP. Al empuñar: todas las criaturas neutrales y buenas en 1 milla reconocen al portador como rey y no atacarán a menos que sean ordenadas. Indestructible.",
+          "categoria": "Arma Dorada",
+          "unica": true,
+          "dorada": true
+        }
+      ],
+      "profBonus": 2,
+      "pendingLevelUp": true,
+      "pendingASI": false,
+      "pendingLevel": 3
+    },
+    "guildId": "1464422214597083360",
+    "savedAt": "2026-03-20T01:38:48.899Z"
+  },
+  "527529469695492120": {
+    "character": {
+      "level": 1,
+      "name": "Therian de Pendejus Astecus",
+      "backstory": "Cooming Trolling",
+      "_raceCategory": "Ravenloft",
+      "race": "Renacido",
+      "class": "Bardo",
+      "subclass": "Colegio del Glamour",
+      "background": "Sabio",
+      "alignment": "Neutral Bueno 😇",
+      "rolledStats": {
+        "STR": 9,
+        "DEX": 8,
+        "CON": 9,
+        "INT": 11,
+        "WIS": 12,
+        "CHA": 14
+      },
+      "finalStats": {
+        "STR": 9,
+        "DEX": 8,
+        "CON": 9,
+        "INT": 11,
+        "WIS": 12,
+        "CHA": 14
+      },
+      "stats": {
+        "STR": 9,
+        "DEX": 8,
+        "CON": 9,
+        "INT": 11,
+        "WIS": 12,
+        "CHA": 14
+      },
+      "skills": [
+        "Arcano",
+        "Historia",
+        "Intuición",
+        "Intimidación",
+        "Engaño"
+      ],
+      "languages": [
+        "Común",
+        "Celestial",
+        "Goblin",
+        "Sahuagin"
+      ],
+      "money": {
+        "PC": 0,
+        "PP": 0,
+        "PE": 0,
+        "PO": 150,
+        "PT": 1
+      },
+      "hpMax": 7,
+      "hpActual": 0,
+      "inventory": [
+        {
+          "nombre": "Banquete (por persona)",
+          "cantidad": 1,
+          "peso": 0,
+          "precio": 10,
+          "categoria": "Comida"
+        }
+      ]
+    },
+    "guildId": "1464422214597083360",
+    "savedAt": "2026-03-17T01:59:38.293Z"
+  },
+  "1366543692403445761": {
+    "character": {
+      "level": 1,
+      "name": "Rask",
+      "backstory": "",
+      "_raceCategory": "Monstruosa",
+      "race": "Goblin",
+      "class": "Pícaro",
+      "subclass": "Espadachín",
+      "background": "Forastero Errante",
+      "alignment": "Neutral Verdadero ⚖️",
+      "rolledStats": {
+        "STR": 12,
+        "DEX": 18,
+        "CON": 15,
+        "INT": 16,
+        "WIS": 13,
+        "CHA": 17
+      },
+      "finalStats": {
+        "STR": 14,
+        "DEX": 16,
+        "CON": 14,
+        "INT": 16,
+        "WIS": 17,
+        "CHA": 17
+      },
+      "stats": {
+        "STR": 14,
+        "DEX": 16,
+        "CON": 14,
+        "INT": 16,
+        "WIS": 17,
+        "CHA": 17
+      },
+      "skills": [
+        "Percepción",
+        "Perspicacia",
+        "Acrobacias",
+        "Engaño",
+        "Persuasión",
+        "Sigilo"
+      ],
+      "languages": [
+        "Común",
+        "Goblin"
+      ],
+      "money": {
+        "PC": 0,
+        "PP": 0,
+        "PE": 0,
+        "PO": 150,
+        "PT": 0
+      },
+      "hpMax": 11,
+      "hpActual": 11,
+      "inventory": [
+        {
+          "nombre": "Espada corta",
+          "cantidad": 1,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Recompensa"
+        },
+        {
+          "nombre": "arco",
+          "cantidad": 1,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Recompensa"
+        },
+        {
+          "nombre": "flechas",
+          "cantidad": 20,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Recompensa"
+        },
+        {
+          "nombre": "Equipo de ladron",
+          "cantidad": 1,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Recompensa"
+        },
+        {
+          "nombre": "dagas",
+          "cantidad": 2,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Recompensa"
+        },
+        {
+          "nombre": "armadura de cuero",
+          "cantidad": 1,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Recompensa"
+        }
+      ]
+    },
+    "guildId": "1464422214597083360",
+    "savedAt": "2026-03-19T02:14:54.314Z"
+  },
+  "754403910483181676": {
+    "character": {
+      "level": 1,
+      "name": "Lolko De Leucis",
+      "backstory": "Huérfano de nacimiento se quedo a vivir con un maestro explorador y su esposa hechicera que lo acogieron a la edad de 15 a;os después de haber aprendido todo de su maestro / padre decide aventurarse mas allá de las monta;as donde vivía para descubrir que ha pasado con los de su especie y el motivo de la desaparición repentina de sus padres biológicos. ya a la edad de 25 a;os termino su búsqueda y vengo a sus padres. ahora vaga por el mundo en busca de un nuevo objetivo para su vida.",
+      "_raceCategory": "Común",
+      "race": "Tiefling",
+      "class": "Explorador",
+      "subclass": "Rastreador",
+      "background": "Huérfano",
+      "alignment": "Caótico Bueno 😇💨",
+      "rolledStats": {
+        "STR": 14,
+        "DEX": 16,
+        "CON": 14,
+        "INT": 16,
+        "WIS": 17,
+        "CHA": 17
+      },
+      "finalStats": {
+        "STR": 14,
+        "DEX": 16,
+        "CON": 14,
+        "INT": 16,
+        "WIS": 17,
+        "CHA": 17
+      },
+      "stats": {
+        "STR": 14,
+        "DEX": 16,
+        "CON": 14,
+        "INT": 16,
+        "WIS": 17,
+        "CHA": 17
+      },
+      "skills": [
+        "Juego de Manos",
+        "Sigilo",
+        "Investigación",
+        "Percepción",
+        "Atletismo"
+      ],
+      "languages": [
+        "Común",
+        "Infernal"
+      ],
+      "money": {
+        "PC": 0,
+        "PP": 0,
+        "PE": 0,
+        "PO": 120,
+        "PT": 0
+      },
+      "hpMax": 13,
+      "hpActual": 13,
+      "inventory": [
+        {
+          "nombre": "arco largo",
+          "cantidad": 1,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Recompensa"
+        },
+        {
+          "nombre": "flecha",
+          "cantidad": 20,
+          "peso": 0,
+          "precio": 0,
+          "categoria": "Recompensa"
+        }
+      ]
+    },
+    "guildId": "1464422214597083360",
+    "savedAt": "2026-03-20T02:55:58.220Z"
+  }
+}
