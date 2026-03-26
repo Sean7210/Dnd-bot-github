@@ -1,17 +1,17 @@
 {
   "688371104053854335": {
     "character": {
-      "name": "Azrael",
+      "name": "ark",
       "race": "Elfo",
-      "class": "Hechicero",
-      "subclass": "",
-      "background": "Héroe del Pueblo",
-      "alignment": "Caótico Neutral",
+      "class": "Bárbaro",
+      "subclass": "Senda del Berserker",
+      "background": "Acólito",
+      "alignment": "Neutral Verdadero",
       "skills": [
-        "Trato con animales",
+        "Perspicacia",
+        "Religión",
         "Supervivencia",
-        "Persuasión",
-        "Intuición"
+        "Intimidación"
       ],
       "languages": [
         "Común",
@@ -19,132 +19,53 @@
       ],
       "inventory": [
         {
-          "nombre": "Ballesta ligera",
+          "nombre": "Vale de Aventurero (19 PO)",
           "cantidad": 1,
           "peso": 0,
-          "precio": 0,
-          "categoria": "Equipo inicial",
-          "descripcion": ""
-        },
-        {
-          "nombre": "Virotes de ballesta",
-          "cantidad": 20,
-          "peso": 0,
-          "precio": 0,
-          "categoria": "Equipo inicial",
-          "descripcion": ""
-        },
-        {
-          "nombre": "Foco arcano",
-          "cantidad": 1,
-          "peso": 0,
-          "precio": 0,
-          "categoria": "Equipo inicial",
-          "descripcion": ""
-        },
-        {
-          "nombre": "Paquete de explorador",
-          "cantidad": 1,
-          "peso": 0,
-          "precio": 0,
-          "categoria": "Equipo inicial",
-          "descripcion": ""
-        },
-        {
-          "nombre": "Dagas",
-          "cantidad": 1,
-          "peso": 0,
-          "precio": 0,
-          "categoria": "Equipo inicial",
-          "descripcion": ""
-        },
-        {
-          "nombre": "Herramientas artesanales",
-          "cantidad": 1,
-          "peso": 0,
-          "precio": 0,
-          "categoria": "Trasfondo"
-        },
-        {
-          "nombre": "Pala",
-          "cantidad": 1,
-          "peso": 0,
-          "precio": 0,
-          "categoria": "Trasfondo"
-        },
-        {
-          "nombre": "Olla de hierro",
-          "cantidad": 1,
-          "peso": 0,
-          "precio": 0,
-          "categoria": "Trasfondo"
-        },
-        {
-          "nombre": "Ropa común",
-          "cantidad": 1,
-          "peso": 0,
-          "precio": 0,
-          "categoria": "Trasfondo"
-        },
-        {
-          "nombre": "Vale de Herramienta",
-          "cantidad": 1,
-          "peso": 0,
-          "precio": 0,
-          "categoria": "Vale",
-          "esVale": true
-        },
-        {
-          "nombre": "Vehículos de tierra",
-          "cantidad": 1,
-          "peso": 0,
-          "precio": 0,
-          "categoria": "Trasfondo"
+          "precio": 19,
+          "categoria": "Vale"
         }
       ],
       "money": {
         "PC": 0,
         "PP": 0,
         "PE": 0,
-        "PO": 10,
+        "PO": 19,
         "PT": 0
       },
-      "level": 4,
-      "_modoPapel": false,
+      "level": 1,
+      "_modoPapel": true,
       "backstory": "",
-      "_raceCategory": "Común",
       "rolledStats": {
-        "STR": 15,
-        "DEX": 14,
-        "CON": 14,
-        "INT": 13,
-        "WIS": 15,
-        "CHA": 14
+        "STR": 18,
+        "DEX": 18,
+        "CON": 18,
+        "INT": 18,
+        "WIS": 18,
+        "CHA": 18
       },
       "finalStats": {
-        "STR": 15,
-        "DEX": 16,
-        "CON": 14,
-        "INT": 13,
-        "WIS": 15,
-        "CHA": 14
+        "STR": 18,
+        "DEX": 20,
+        "CON": 18,
+        "INT": 18,
+        "WIS": 18,
+        "CHA": 18
       },
       "stats": {
-        "STR": 15,
-        "DEX": 16,
-        "CON": 14,
-        "INT": 13,
-        "WIS": 15,
-        "CHA": 14
+        "STR": 18,
+        "DEX": 20,
+        "CON": 18,
+        "INT": 18,
+        "WIS": 18,
+        "CHA": 18
       },
-      "hpMax": 20,
-      "hpActual": 20,
-      "pendingLevelUp": true,
-      "pendingASI": true,
-      "profBonus": 2
+      "hpMax": 16,
+      "hpActual": 16,
+      "_equipoInicialElegido": true
     },
     "guildId": "1464422214597083360",
-    "savedAt": "2026-03-21T15:04:53.383Z"
+    "savedAt": "2026-03-21T20:38:58.590Z"
   },
   "502684265704849408": {
     "character": {
@@ -418,77 +339,38 @@
   },
   "754403910483181676": {
     "character": {
-      "level": 1,
-      "name": "Lolko De Leucis",
-      "backstory": "Huérfano de nacimiento se quedo a vivir con un maestro explorador y su esposa hechicera que lo acogieron a la edad de 15 a;os después de haber aprendido todo de su maestro / padre decide aventurarse mas allá de las monta;as donde vivía para descubrir que ha pasado con los de su especie y el motivo de la desaparición repentina de sus padres biológicos. ya a la edad de 25 a;os termino su búsqueda y vengo a sus padres. ahora vaga por el mundo en busca de un nuevo objetivo para su vida.",
-      "_raceCategory": "Común",
-      "race": "Tiefling",
-      "class": "Explorador",
-      "subclass": "Rastreador",
-      "background": "Huérfano",
-      "alignment": "Caótico Bueno 😇💨",
       "rolledStats": {
-        "STR": 14,
-        "DEX": 16,
-        "CON": 14,
-        "INT": 16,
-        "WIS": 17,
-        "CHA": 17
+        "STR": 10,
+        "DEX": 10,
+        "CON": 10,
+        "INT": 10,
+        "WIS": 10,
+        "CHA": 10
       },
       "finalStats": {
-        "STR": 14,
-        "DEX": 16,
-        "CON": 14,
-        "INT": 16,
-        "WIS": 17,
-        "CHA": 17
+        "STR": 10,
+        "DEX": 10,
+        "CON": 10,
+        "INT": 10,
+        "WIS": 10,
+        "CHA": 10
       },
       "stats": {
-        "STR": 14,
-        "DEX": 16,
-        "CON": 14,
-        "INT": 16,
-        "WIS": 17,
-        "CHA": 17
+        "STR": 10,
+        "DEX": 10,
+        "CON": 10,
+        "INT": 10,
+        "WIS": 10,
+        "CHA": 10
       },
-      "skills": [
-        "Juego de Manos",
-        "Sigilo",
-        "Investigación",
-        "Percepción",
-        "Atletismo"
-      ],
+      "hpMax": null,
+      "hpActual": null,
+      "skills": [],
       "languages": [
-        "Común",
-        "Infernal"
-      ],
-      "money": {
-        "PC": 0,
-        "PP": 0,
-        "PE": 0,
-        "PO": 120,
-        "PT": 0
-      },
-      "hpMax": 13,
-      "hpActual": 13,
-      "inventory": [
-        {
-          "nombre": "arco largo",
-          "cantidad": 1,
-          "peso": 0,
-          "precio": 0,
-          "categoria": "Recompensa"
-        },
-        {
-          "nombre": "flecha",
-          "cantidad": 20,
-          "peso": 0,
-          "precio": 0,
-          "categoria": "Recompensa"
-        }
+        "Común"
       ]
     },
     "guildId": "1464422214597083360",
-    "savedAt": "2026-03-20T02:55:58.220Z"
+    "savedAt": "2026-03-21T20:39:55.516Z"
   }
 }

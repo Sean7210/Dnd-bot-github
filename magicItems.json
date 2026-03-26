@@ -1,0 +1,34 @@
+{
+  "688371104053854335": [
+    {
+      "id": 73,
+      "nombre": "Anillo de Velocidad",
+      "desc": "Brazalete de oro. +5 ft de movimiento. Si un hechizo suma velocidad, +5 ft adicionales.",
+      "fechaObtencion": "2026-03-21T19:48:08.683Z"
+    }
+  ],
+  "754403910483181676": [
+    {
+      "id": 17,
+      "nombre": "Pantuflas Boyantes",
+      "desc": "Pantuflas que permiten caminar sobre líquidos.",
+      "fechaObtencion": "2026-03-22T03:55:28.973Z"
+    }
+  ],
+  "759550917912690718": [
+    {
+      "id": 26,
+      "nombre": "Halcón de Acero",
+      "desc": "Halcón mecánico con comandos simples. Regresa tras 1 día separado. 5 PG (ficha Halcón).",
+      "fechaObtencion": "2026-03-22T03:57:12.755Z"
+    }
+  ],
+  "704461284653006891": [
+    {
+      "id": 22,
+      "nombre": "Tiempo Prestado",
+      "desc": "Reloj de arena: 1 uso de Aumento de Acción/día. Al amanecer tira 1d20 (13+ = carga).",
+      "fechaObtencion": "2026-03-26T01:44:31.753Z"
+    }
+  ]
+}

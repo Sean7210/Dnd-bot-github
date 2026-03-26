@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { getCharacter, updateCharacter } = require('../utils/characterStore.js');
+const { getCharacter, updateCharacter } = require('../db/characterStore.js');
 const { getRandomUniqueWeapon, getArmaDorada } = require('./uniqueWeaponsPanel.js');
 
 // Tipos de ticket reconocidos en el inventario

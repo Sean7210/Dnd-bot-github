@@ -14,7 +14,7 @@ const { BACKGROUNDS } = require('../data/backgrounds.js');
 const { IDIOMAS_POR_RAZA, IDIOMAS_ELECCION_RAZA, IDIOMAS_POR_TRASFONDO, TODOS_IDIOMAS } = require('../data/languages.js');
 const { applyRacialBonuses, getCategoryEmoji, racaNecesitaEleccionBonus, getBonusAnyInfo } = require('../utils/helpers.js');
 const { getSession, deleteSession } = require('../utils/sessions.js');
-const { saveCharacter } = require('../utils/characterStore.js');
+const { saveCharacter } = require('../db/characterStore.js');
 const { showWealthRoll } = require('./equipoInicial.js');
 
 // Responder correctamente a cualquier tipo de interacción
@@ -387,38 +387,12 @@ async function handleFisicoInteraction(interaction) {
   // Clase
   if (interaction.isStringSelectMenu() && id === 'fisico_select_class') {
     char.class = interaction.values[0];
-    const cls  = CLASSES[char.class] || {};
-    if (cls.subclasses && Object.keys(cls.subclasses).length) {
-      const subs = Object.keys(cls.subclasses);
-      const embed = new EmbedBuilder()
-        .setTitle(`✨ 2️⃣b Subclase de ${char.class}`)
-        .setColor(0xE74C3C)
-        .setDescription(`Elige tu subclase de ${char.class}:`);
-      await rep(interaction, {
-        embeds: [embed],
-        components: [new ActionRowBuilder().addComponents(
-          new StringSelectMenuBuilder().setCustomId('fisico_select_subclass').setPlaceholder('Elige subclase...')
-            .addOptions(subs.slice(0,25).map(s => {
-              const opt = { label: s, value: s };
-              const desc = cls.subclasses[s]?.description;
-              if (desc) opt.description = desc.slice(0,100);
-              return opt;
-            }))
-        )],
-        ephemeral: true,
-      });
-    } else {
-      await mostrarTrasfondo(interaction, char);
-    }
-    return true;
-  }
-
-  // Subclase
-  if (interaction.isStringSelectMenu() && id === 'fisico_select_subclass') {
-    char.subclass = interaction.values[0];
+    // Subclase se elige con /obtener-subclase al llegar al nivel requerido
     await mostrarTrasfondo(interaction, char);
     return true;
   }
+
+  // Subclase manejada por /obtener-subclase
 
   // Trasfondo
   if (interaction.isStringSelectMenu() && id === 'fisico_select_background') {
@@ -465,8 +439,9 @@ async function handleFisicoInteraction(interaction) {
     // Calcular HP con las stats confirmadas y guardar snapshot
     try {
       const { calcHP } = require('../utils/helpers.js');
+function getClaseData(cls) { const {CLASSES}=require('../data/classes.js'); if(CLASSES[cls]) return CLASSES[cls]; const n=s=>s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); const f=Object.entries(CLASSES).find(([k])=>n(k)===n(cls)); return f?f[1]:{hitDie:8}; }
       const { CLASSES } = require('../data/classes.js');
-      const cls = CLASSES[char.class] || {};
+      const cls = getClaseData(char.class);
       char.hpMax    = calcHP(cls, final.CON ?? 10, char.level || 1);
       char.hpActual = char.hpMax;
       saveCharacter(uid, char, interaction.guildId);

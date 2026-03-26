@@ -14,8 +14,20 @@ const { BACKGROUNDS } = require('../data/backgrounds.js');
 const { EQUIPO_INICIAL_CLASE, tirarDineroCombate } = require('../data/classEquipment.js');
 const { monederoVacio } = require('../data/startingWealth.js');
 const { calcHP, buildCharacterEmbed } = require('../utils/helpers.js');
+
+// Buscar clase de forma robusta (por si hay diferencias de encoding/mayúsculas)
+function getClaseData(className) {
+  if (!className) return { hitDie: 8 };
+  const { CLASSES } = require('../data/classes.js');
+  // Coincidencia exacta
+  if (CLASSES[className]) return CLASSES[className];
+  // Coincidencia insensible a mayúsculas y acentos
+  const norm = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const found = Object.entries(CLASSES).find(([k]) => norm(k) === norm(className));
+  return found ? found[1] : { hitDie: 8 };
+}
 const { getSession }  = require('../utils/sessions.js');
-const { saveCharacter, getCharacter, updateCharacter } = require('../utils/characterStore.js');
+const { saveCharacter, getCharacter, updateCharacter } = require('../db/characterStore.js');
 const { getRandomUniqueWeapon, getArmaDorada } = require('./uniqueWeaponsPanel.js');
 
 // ─── Helper de respuesta universal ───────────────────────────────────────────
@@ -58,19 +70,7 @@ function extraerDineroTrasfondo(bgData) {
   return { po, pp, pc, pe, pt, equipoSinDinero };
 }
 
-// ─── Probabilidades del vale ──────────────────────────────────────────────────
-// Sacado de 1d10.000.000:
-//   1           → Arma dorada
-//   2-10        → Arma única
-//   11-10.000   → Vale especial (sustituye elecciones de clase por vale extra)
-//   resto       → Vale normal (dinero)
-function tirarVale(clase) {
-  const d = Math.floor(Math.random() * 10000000) + 1;
-  if (d === 1)              return { tipo: 'dorado',   arma: getArmaDorada(clase) };
-  if (d <= 10)              return { tipo: 'unico',    arma: getRandomUniqueWeapon(clase) };
-  if (d <= 10000)           return { tipo: 'especial', arma: null }; // vale bonus extra
-  return                           { tipo: 'normal',   arma: null };
-}
+
 
 
 // ─── Extraer dinero del equipment del trasfondo ───────────────────────────────
@@ -114,7 +114,7 @@ async function showWealthRoll(interaction, char) {
   const uid    = interaction.user.id;
   const session = getSession(uid);
 
-  char.hpMax    = calcHP(CLASSES[char.class], char.finalStats?.CON ?? 10);
+  char.hpMax    = calcHP(getClaseData(char.class), char.finalStats?.CON ?? 10);
   char.hpActual = char.hpMax;
 
   const bgData    = BACKGROUNDS[char.background] || {};
@@ -157,9 +157,9 @@ async function showWealthRoll(interaction, char) {
     .setDescription('**' + char.name + '** — ❤️ HP: **' + char.hpMax + '**\n\nElige cómo comenzar la aventura:')
     .addFields(
       { name: '⚔️ Opción A — Equipo de clase + trasfondo', value:
-        previewClase.slice(0,700) +
-        '\n\n📜 **Trasfondo:** ' + itemsTrasStr.slice(0,200) +
-        '\n💰 **Dinero del trasfondo:** ' + dineroTrasStr,
+        previewClase.slice(0,600) +
+        (itemsTrasStr !== '*(ninguno)*' ? '\n📜 **Trasfondo:** ' + itemsTrasStr.slice(0,150) : '') +
+        '\n💰 **Dinero trasfondo:** ' + dineroTrasStr,
         inline: false },
       { name: '💰 Opción B — Solo dinero (renuncias al equipo)', value:
         dineroInfo.formula + ' → [' + dineroInfo.dados.join(', ') + ']' +
@@ -176,7 +176,7 @@ async function showWealthRoll(interaction, char) {
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('equip_opcion_a').setLabel('⚔️ Equipo de clase').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('equip_opcion_b').setLabel('💰 Dinero (' + dineroInfo.total + ' PO)').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId('equip_opcion_c').setLabel('📜 Vale (' + valeValor + ' PO)').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('equip_opcion_c').setLabel('📜 Vale — Tirar dados').setStyle(ButtonStyle.Secondary),
   );
 
   await responder(interaction, { embeds: [embed], components: [row] });
@@ -315,7 +315,17 @@ async function aplicarEquipoFinal(interaction, char, inv) {
 
 // ─── Ficha final ──────────────────────────────────────────────────────────────
 async function showFinalCharacter(interaction, char) {
-  saveCharacter(interaction.user.id, char, interaction.guildId);
+  char._equipoInicialElegido = true;
+  // Inicializar magia si es clase lanzadora
+  try {
+    const { inicializarMagia, notificarSeleccionPendiente } = require('./magiaPanel.js');
+    inicializarMagia(char);
+    saveCharacter(interaction.user.id, char, interaction.guildId);
+    // Notificar al jugador sobre selección de trucos/hechizos pendiente
+    await notificarSeleccionPendiente(interaction.client, interaction.user.id, char).catch(()=>{});
+  } catch {
+    saveCharacter(interaction.user.id, char, interaction.guildId);
+  }
 
   // Anuncio vale especial PO
   if (char._valeEspecialPO) {
@@ -401,42 +411,54 @@ async function handleEquipoInteraction(interaction) {
   }
 
   if (id === 'equip_opcion_c') {
-    const ec        = session._equipChoice;
-    const valeValor = ec?.valeValor ?? 600;
-    const resultado = tirarVale(char.class);
+    // Mostrar pantalla de tirada — el jugador pulsa el botón para tirar
+    const nivel = char.level || 1;
+    const embed = new EmbedBuilder()
+      .setTitle('📜 Vale de Aventurero')
+      .setColor(0x8B4513)
+      .setDescription(
+        '**' + char.name + '** — nivel **' + nivel + '**\n\n' +
+        'El valor del vale se calcula con:\n' +
+        '🎲 **d20** × nivel (' + nivel + ') × **d100**\n\n' +
+        '👁️ *El dios de la suerte está observando...*\n\n' +
+        'Pulsa el botón para tirar los dados.'
+      );
+    await responder(interaction, {
+      embeds: [embed],
+      components: [new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('equip_vale_tirar').setLabel('🎲 Tirar dados').setStyle(ButtonStyle.Danger)
+      )],
+    });
+    return true;
+  }
 
-    let inv = [];
-    let money = monederoVacio();
+  if (id === 'equip_vale_tirar') {
+    const nivel  = char.level || 1;
+    const d20    = Math.floor(Math.random() * 20) + 1;
+    const d100   = Math.floor(Math.random() * 100) + 1;
+    const total  = d20 * nivel * d100;
 
-    if (resultado.tipo === 'dorado' && resultado.arma) {
-      inv = [{ nombre:resultado.arma.nombre, cantidad:1, peso:1, precio:0,
-               daño:resultado.arma.daño, propiedades:resultado.arma.propiedades,
-               descripcion:resultado.arma.desc, categoria:'Arma Dorada', dorada:true }];
-      char._valeDorado = resultado.arma;
-
-    } else if (resultado.tipo === 'unico' && resultado.arma) {
-      inv = [{ nombre:resultado.arma.nombre, cantidad:1, peso:1, precio:0,
-               daño:resultado.arma.daño, propiedades:resultado.arma.propiedades,
-               descripcion:resultado.arma.descripcion, categoria:'Arma Única', unica:true }];
-      char._valeEspecial = resultado.arma;
-
-    } else if (resultado.tipo === 'especial') {
-      // Vale especial: reemplaza elecciones de clase por dinero extra (vale × 2)
-      const bonusPO = valeValor * 2;
-      money.PO = bonusPO;
-      inv = [{ nombre:'Vale Especial de Aventurero (' + bonusPO + ' PO)', cantidad:1, peso:0, precio:bonusPO, categoria:'Vale' }];
-      char._valeEspecialPO = bonusPO;
-
-    } else {
-      // Vale normal
-      money.PO = valeValor;
-      inv = [{ nombre:'Vale de Aventurero (' + valeValor + ' PO)', cantidad:1, peso:0, precio:valeValor, categoria:'Vale' }];
-    }
+    const money = monederoVacio();
+    money.PO    = total;
+    const inv   = [{ nombre: 'Vale de Aventurero (' + total + ' PO)', cantidad:1, peso:0, precio:total, categoria:'Vale' }];
 
     char.inventory = inv;
     char.money     = money;
     if (session.character) session.character = char;
     else updateCharacter(uid, { inventory:inv, money });
+
+    const embed = new EmbedBuilder()
+      .setTitle('🎲 ¡Vale tirado!')
+      .setColor(0xFFD700)
+      .setDescription(
+        '**Resultado:**\n' +
+        'd20: **' + d20 + '** × nivel ' + nivel + ' × d100: **' + d100 + '** = **' + total + ' PO**\n\n' +
+        '💰 Recibes **' + total + ' PO** en tu monedero.'
+      );
+
+    await responder(interaction, { embeds: [embed], components: [] });
+    // Pequeño delay para que el jugador vea el resultado antes de la ficha
+    await new Promise(r => setTimeout(r, 1500));
     await showFinalCharacter(interaction, char);
     return true;
   }
@@ -507,7 +529,31 @@ async function handleEquipoInteraction(interaction) {
 async function cmdEquipoInicial(interaction) {
   const char = getCharacter(interaction.user.id);
   if (!char) return interaction.reply({ content:'❌ Primero crea tu personaje con `/crear-personaje`.', ephemeral:true });
-  // Slash command → usar reply directo
+
+  // Comprobar si ya tiene equipo inicial
+  const yaEquipado = char._equipoInicialElegido === true ||
+    (char.inventory && char.inventory.length > 0) ||
+    (char.money && Object.values(char.money).some(v => v > 0));
+
+  if (yaEquipado) {
+    const invStr  = (char.inventory||[]).slice(0,5).map(i=>'• '+i.nombre).join('\n') || '—';
+    const monStr  = Object.entries(char.money||{}).filter(([,v])=>v>0).map(([k,v])=>v+' '+k).join(' ') || '—';
+    return interaction.reply({
+      embeds: [new EmbedBuilder()
+        .setTitle('🎒 Ya tienes equipo inicial')
+        .setColor(0xE67E22)
+        .setDescription(
+          `**${char.name}** ya tiene su equipo inicial asignado.\n\n` +
+          `**Inventario actual:**\n${invStr}\n\n` +
+          `**Monedero:** ${monStr}\n\n` +
+          `Si crees que esto es un error, contacta al DM.`
+        )
+      ],
+      ephemeral: true,
+    });
+  }
+
+  // Sin equipo → permitir elegir
   await showWealthRoll(interaction, char);
 }
 

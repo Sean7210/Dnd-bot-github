@@ -9,9 +9,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { getCharacter, updateCharacter } = require('../utils/characterStore.js');
+const { getCharacter, updateCharacter } = require('../db/characterStore.js');
 const { formatearMonedero, totalEnPC, pagar }  = require('../data/startingWealth.js');
-const { isDM } = require('./dmPanel.js');
+const { isDM } = require('../utils/isDM.js');
 
 // Dos slots por servidor: 'dm' y 'jugadores'
 // SUBASTAS[guildId] = { dm: SubastaState|null, jugadores: SubastaState|null }
@@ -106,7 +106,7 @@ async function cmdSubastaAbrir(interaction) {
   // Mostrar select de inventario para elegir el objeto
   const opciones = inv.slice(0, 25).map(i => ({
     label: i.nombre.slice(0, 100),
-    description: `x${i.cantidad}${i.precio ? ' · ' + i.precio + ' PO' : ''}${i.daño ? ' · ' + i.daño : ''}`.slice(0,100),
+    description: (`x${i.cantidad}${i.precio ? ' · ' + i.precio + ' PO' : ''}${i.daño ? ' · ' + i.daño : ''}`).slice(0,100) || undefined,
     value: i.nombre.slice(0, 100),
   }));
 

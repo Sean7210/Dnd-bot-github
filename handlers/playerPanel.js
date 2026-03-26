@@ -16,7 +16,7 @@ const {
   TextInputStyle,
 } = require('discord.js');
 
-const { getCharacter, updateCharacter, saveCharacter } = require('../utils/characterStore.js');
+const { getCharacter, updateCharacter, saveCharacter } = require('../db/characterStore.js');
 const { CLASSES }  = require('../data/classes.js');
 
 // Responde correctamente si la interacción ya fue deferrida
@@ -111,36 +111,33 @@ async function showTiradaDadoGolpe(interaction, char) {
   const cls    = CLASSES[char.class] || {};
   const hitDie = cls.hitDie || 6;
   const modCON = Math.floor(((char.finalStats?.CON ?? 10) - 10) / 2);
-  const minHP  = 1 + modCON;
-  const maxHP  = hitDie + modCON;
   const nivel  = char.level || 1;
+  const profBonus = Math.ceil(nivel/4)+1;
+
+  const desc = '**Clase:** ' + char.class + ' — Dado de golpe: **d' + hitDie + '**\n' +
+    '**Mod CON:** ' + (modCON >= 0 ? '+' : '') + modCON + '\n\n' +
+    'Pulsa el boton para tirar tu **d' + hitDie + '** y ver cuantos HP ganas.\n\n' +
+    '*Posible resultado: ' + (1 + modCON) + ' – ' + (hitDie + modCON) + ' HP adicionales*';
 
   const embed = new EmbedBuilder()
-    .setTitle(`⬆️ ¡${char.name} sube al nivel ${nivel}!`)
+    .setTitle('Nivel ' + nivel + ' — ' + char.name)
     .setColor(0xFFD700)
-    .setDescription(
-      `**Clase:** ${char.class} — Dado de golpe: **d${hitDie}**
-` +
-      `**Mod CON:** ${modCON >= 0 ? '+' : ''}${modCON}
-
-` +
-      `Pulsa el botón para tirar tu **d${hitDie}** y calcular los HP que ganas.
-
-` +
-      `*Resultado posible: ${minHP} – ${maxHP} HP adicionales*`
+    .setDescription(desc)
+    .addFields(
+      { name: 'HP actuales', value: (char.hpActual||0) + '/' + (char.hpMax||0), inline: true },
+      { name: 'Bono competencia', value: '+' + profBonus, inline: true },
     )
-    .setFooter({ text: `HP actuales: ${char.hpActual}/${char.hpMax}` });
+    .setFooter({ text: 'El dado de golpe de ' + char.class + ' es d' + hitDie });
 
-  const rows = [
-    new ActionRowBuilder().addComponents(
+  await rep(interaction, {
+    embeds: [embed],
+    components: [new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('nivel_tirar_dado_golpe')
-        .setLabel(`🎲 Tirar d${hitDie} + CON`)
+        .setLabel('Tirar d' + hitDie + ' + CON (' + (modCON>=0?'+':'') + modCON + ')')
         .setStyle(ButtonStyle.Success)
-    ),
-  ];
-
-  await rep(interaction, { embeds: [embed], components: rows });
+    )],
+  });
 }
 
 // ─── Paso 1 de ASI: elegir modo (+2 a una / +1 a dos / dote) ─────────────────

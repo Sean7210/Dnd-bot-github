@@ -2,6 +2,7 @@
 // Bot D&D 5e para Discord — Punto de entrada principal
 // ─────────────────────────────────────────────────────────────────────────────
 require('dotenv').config();
+const { initSchema } = require('./db/database.js');
 
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const { rollDice, statMod } = require('./utils/helpers.js');
@@ -29,6 +30,9 @@ const {
   cmdDmRecompensar,
   cmdDmInventario,
   cmdInicio,
+  cmdCurar,
+  cmdDmQuitarItem,
+  handleRecompensaSelect,
 } = require('./handlers/dmPanel.js');
 const {
   cmdMiPersonaje,
@@ -39,7 +43,7 @@ const {
   cmdDmAbrirTienda, cmdDmCerrarTienda,
   cmdDmAbrirBar, cmdDmCerrarBar,
   cmdDmPrecioTienda,
-  cmdTienda, cmdBar,
+  cmdTienda, cmdBar, cmdMiDinero,
   handleShopInteraction,
 } = require('./handlers/shopPanel.js');
 const {
@@ -48,13 +52,19 @@ const {
 } = require('./handlers/inventoryPanel.js');
 const { cmdMiMagia, cmdMiMagiaTirar, cmdDmDarMagia, cmdDmTirarMagia, cmdDmQuitarMagia } = require('./handlers/magicItemsPanel.js');
 const { cmdCanjearTicket, handleTicketInteraction } = require('./handlers/ticketPanel.js');
+const { cmdObtenerSubclase, handleSubclaseInteraction, cmdDmDarSubclase } = require('./handlers/subclasePanel.js');
+const { lanzarEventoAleatorio, iniciarTimerEventos, cmdDmEvento, cmdEventoVer } = require('./handlers/eventosPanel.js');
 const { cmdDmAbrirAlquimista, cmdDmCerrarAlquimista, cmdAlquimista, handleAlquimistaInteraction } = require('./handlers/alchemistPanel.js');
 const { cmdDmAbrirArtificiero, cmdDmCerrarArtificiero, cmdArtificiero, cmdDmArtificieroPrecio, cmdArtificieroPagar, handleArtificeroInteraction } = require('./handlers/artificePanel.js');
-const { cmdDuelo, cmdDuelo2v2, cmdApostar, handleDueloInteraction } = require('./handlers/duelPanel.js');
+const { cmdDuelo, cmdDuelo2v2, cmdApostar, handleDueloInteraction, restaurarDuelos } = require('./handlers/duelPanel.js');
 const { cmdDmSesionCrear, cmdDmSesionCerrar, cmdDmSesionVer, cmdSesionUnirse, cmdSesionSalir } = require('./handlers/sessionsPanel.js');
 const { cmdDmSubasta, cmdDmSubastaCerrar, cmdSubastaAbrir, cmdSubastaVer, cmdPujar, cmdPujarDm, cmdPujarJugadores, handleSubastaSelectObjeto } = require('./handlers/auctionPanel.js');
 const { cmdEntrenar, handleTrainingInteraction } = require('./handlers/trainingPanel.js');
 const { cmdDmArmaUnicaAñadir, cmdDmArmaUnicaListar, cmdDmArmaUnicaEliminar } = require('./handlers/uniqueWeaponsPanel.js');
+const { cmdDmEventoCaza, cmdDmCazaIniciar, cmdDmCazaCancelar, cmdDmCazaListar, handleCazaInteraction } = require('./handlers/cazaPanel.js');
+const { cmdMisStats, cmdSalvacion, cmdDmMonstruos } = require('./handlers/statsPanel.js');
+const { cmdCofre, cmdCofreDepositar, cmdCofrePagar, cmdDmCofreVer, handleCofreInteraction, iniciarCobroMantenimiento } = require('./handlers/cofrePanel.js');
+const { cmdMisHechizos, cmdPrepararHechizo, cmdLanzarHechizo, cmdDescanso, cmdDmDarHechizo, handleMagiaInteraction } = require('./handlers/magiaPanel.js');
 
 // ─── SLASH: /tirada ───────────────────────────────────────────────────────────
 async function slashTirada(interaction) {
@@ -200,6 +210,13 @@ const client = new Client({
 
 // ─── READY (carga segura con try/catch por módulo) ────────────────────────────
 client.once('ready', () => {
+  // ── Inicializar base de datos SQLite ──────────────────────────────────────
+  try {
+    initSchema();
+  } catch (e) {
+    console.error('⚠️  Error inicializando SQLite:', e.message);
+  }
+
   let raceCount = 0, classCount = 0, featCount = 0;
 
   try {
@@ -226,7 +243,7 @@ client.once('ready', () => {
 client.on('messageCreate', handleMessageCommand);
 
 // ─── Comandos que pueden tardar >3s y necesitan defer ────────────────────────
-const SLOW_COMMANDS = new Set(['personaje', 'subir-nivel', 'dm-subirnivel', 'dm-ajustar', 'dm-dano', 'dm-curar']);
+const SLOW_COMMANDS = new Set(['dm-subirnivel', 'dm-ajustar', 'dm-dano', 'dm-curar']);
 
 // ─── SLASH COMMANDS + BOTONES + SELECTS + MODALES ────────────────────────────
 client.on('interactionCreate', async (interaction) => {
@@ -240,7 +257,7 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.isChatInputCommand()) {
       // Defer para comandos lentos (evita el timeout de 3s de Discord)
       if (SLOW_COMMANDS.has(interaction.commandName)) {
-        await interaction.deferReply({ ephemeral: true }).catch(() => {});
+        await interaction.deferReply({ flags: 64 }).catch(() => {});
       }
 
       switch (interaction.commandName) {
@@ -285,22 +302,51 @@ client.on('interactionCreate', async (interaction) => {
         case 'ayuda':            return await cmdAyuda(interaction);
         // Jugador
         case 'mi-personaje':     return await cmdMiPersonaje(interaction);
+        case 'mi-dinero':        return await cmdMiDinero(interaction);
         case 'subir-nivel':      return await cmdSubirNivel(interaction);
         // Jugador — inventario e intercambios
         case 'inicio':           return await cmdInicio(interaction);
+        case 'mis-stats':      return await cmdMisStats(interaction);
+        case 'salvacion':     return await cmdSalvacion(interaction);
+        case 'dm-monstruos':  return await cmdDmMonstruos(interaction);
+        case 'cofre':            return await cmdCofre(interaction);
+        case 'cofre-depositar':  return await cmdCofreDepositar(interaction);
+        case 'cofre-pagar':      return await cmdCofrePagar(interaction);
+        case 'dm-cofre-ver':     return await cmdDmCofreVer(interaction);
+        case 'mis-hechizos':      return await cmdMisHechizos(interaction);
+        case 'preparar-hechizo':  return await cmdPrepararHechizo(interaction);
+        case 'lanzar-hechizo':    return await cmdLanzarHechizo(interaction);
+        case 'descanso':          return await cmdDescanso(interaction);
+        case 'dm-dar-hechizo':    return await cmdDmDarHechizo(interaction);
+        case 'dm-evento-caza':   return await cmdDmEventoCaza(interaction);
+        case 'dm-caza-iniciar':  return await cmdDmCazaIniciar(interaction);
+        case 'dm-caza-cancelar': return await cmdDmCazaCancelar(interaction);
+        case 'dm-caza-listar':   return await cmdDmCazaListar(interaction);
+        case 'dm-evento':         return await cmdDmEvento(interaction);
+        case 'evento-ver':        return await cmdEventoVer(interaction);
         case 'alquimista':       return await cmdAlquimista(interaction);
-        case 'dm-abrir-alquimista':  return await cmdDmAbrirAlquimista(interaction);
-        case 'dm-cerrar-alquimista': return await cmdDmCerrarAlquimista(interaction);
+        case 'dm-alquimista': {
+          const sub = interaction.options.getSubcommand();
+          if (sub === 'abrir')  return await cmdDmAbrirAlquimista(interaction);
+          if (sub === 'cerrar') return await cmdDmCerrarAlquimista(interaction);
+          return;
+        }
         case 'artificiero':       return await cmdArtificiero(interaction);
         case 'artificiero-pagar': return await cmdArtificieroPagar(interaction);
-        case 'dm-abrir-artificiero': return await cmdDmAbrirArtificiero(interaction);
-        case 'dm-cerrar-artificiero': return await cmdDmCerrarArtificiero(interaction);
-        case 'dm-artificiero-precio': return await cmdDmArtificieroPrecio(interaction);
+        case 'dm-artificiero': {
+          const sub = interaction.options.getSubcommand();
+          if (sub === 'abrir')  return await cmdDmAbrirArtificiero(interaction);
+          if (sub === 'cerrar') return await cmdDmCerrarArtificiero(interaction);
+          if (sub === 'precio') return await cmdDmArtificieroPrecio(interaction);
+          return;
+        }
         case 'curar':             return await cmdCurar(interaction);
+        case 'obtener-subclase':  return await cmdObtenerSubclase(interaction);
+        case 'dm-dar-subclase':   return await cmdDmDarSubclase(interaction);
         case 'equipo-inicial':   return await cmdEquipoInicial(interaction);
         case 'crear-personaje-fisico': return await startFisico(interaction);
-        case 'crear-personaje-fisico': return await startCharacterCreation(interaction, true);
         case 'dm-inventario':    return await cmdDmInventario(interaction);
+        case 'dm-quitar-item':   return await cmdDmQuitarItem(interaction);
         case 'canjear-ticket':   return await cmdCanjearTicket(interaction);
         case 'duelo':            return await cmdDuelo(interaction);
         case 'duelo-2v2':        return await cmdDuelo2v2(interaction);
@@ -320,30 +366,38 @@ client.on('interactionCreate', async (interaction) => {
         case 'dm-ajustar':       return await cmdDmAjustar(interaction);
         case 'dm-dano':          return await cmdDmDano(interaction);
         case 'dm-curar':         return await cmdDmCurar(interaction);
-        case 'dm-abrir-tienda':  return await cmdDmAbrirTienda(interaction);
-        case 'dm-cerrar-tienda': return await cmdDmCerrarTienda(interaction);
-        case 'dm-precio-tienda':  return await cmdDmPrecioTienda(interaction);
-        case 'dm-abrir-bar':     return await cmdDmAbrirBar(interaction);
-        case 'dm-cerrar-bar':    return await cmdDmCerrarBar(interaction);
+        case 'dm-tienda': {
+          const sub = interaction.options.getSubcommand();
+          if (sub === 'abrir')  return await cmdDmAbrirTienda(interaction);
+          if (sub === 'cerrar') return await cmdDmCerrarTienda(interaction);
+          if (sub === 'precio') return await cmdDmPrecioTienda(interaction);
+          return;
+        }
+        case 'dm-bar': {
+          const sub = interaction.options.getSubcommand();
+          if (sub === 'abrir')  return await cmdDmAbrirBar(interaction);
+          if (sub === 'cerrar') return await cmdDmCerrarBar(interaction);
+          return;
+        }
       }
       return;
     }
 
     // ── Botones / Selects / Modales ───────────────────────────────────────────
-    if (await handleLevelUpInteraction(interaction))  return;
-    if (await handleShopInteraction(interaction))     return;
-    if (await handleSubastaSelectObjeto(interaction))  return;
-    if (await handleTicketInteraction(interaction))    return;
-    if (await handleAlquimistaInteraction(interaction))  return;
-    if (await handleArtificeroInteraction(interaction))   return;
-    if (await handleDueloInteraction(interaction))         return;
-    if (await handleTrainingInteraction(interaction))  return;
-    if (await handleInventoryInteraction(interaction)) return;
-    if (await handleTicketInteraction(interaction))    return;
-    if (await handleAlquimistaInteraction(interaction))  return;
-    if (await handleArtificeroInteraction(interaction))   return;
-    if (await handleDueloInteraction(interaction))         return;
-    if (await handleTrainingInteraction(interaction))  return;
+    if (await handleRecompensaSelect(interaction))     return;
+    if (await handleCofreInteraction(interaction))     return;
+    if (await handleCazaInteraction(interaction))      return;
+    if (await handleMagiaInteraction(interaction))      return;
+    if (await handleSubclaseInteraction(interaction))   return;
+    if (await handleLevelUpInteraction(interaction))    return;
+    if (await handleShopInteraction(interaction))       return;
+    if (await handleSubastaSelectObjeto(interaction))   return;
+    if (await handleTicketInteraction(interaction))     return;
+    if (await handleAlquimistaInteraction(interaction)) return;
+    if (await handleArtificeroInteraction(interaction)) return;
+    if (await handleDueloInteraction(interaction))      return;
+    if (await handleTrainingInteraction(interaction))   return;
+    if (await handleInventoryInteraction(interaction))  return;
     await handleCreationInteraction(interaction);
 
   } catch (err) {

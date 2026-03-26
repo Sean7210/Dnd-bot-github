@@ -9,7 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { getCharacter } = require('../utils/characterStore.js');
+const { getCharacter } = require('../db/characterStore.js');
 const { isDM }         = require('./dmPanel.js');
 
 // Estado en memoria: { [guildId]: { nombre, max, dmId, jugadores:[userId], channelId, abierta } }

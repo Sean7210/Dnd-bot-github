@@ -6,11 +6,11 @@
 //  /dm-arma-unica-eliminar id
 // ─────────────────────────────────────────────────────────────────────────────
 const { EmbedBuilder } = require('discord.js');
-const { getWeapons, addWeapon, removeWeapon } = require('../utils/uniqueWeaponsStore.js');
+const { getWeapons, addWeapon, removeWeapon } = require('../db/uniqueWeaponsStore.js');
 const { getArmaAleatoriaClase, getArmaAleatoria, ARMAS_UNICAS, getArmasClase } = require('../data/uniqueWeapons.js');
 const { ARMAS_DORADAS, getArmaDoradaAleatoria } = require('../data/goldenWeapons.js');
-const { getCharacter } = require('../utils/characterStore.js');
-const { isDM } = require('./dmPanel.js');
+const { getCharacter } = require('../db/characterStore.js');
+const { isDM } = require('../utils/isDM.js');
 
 async function cmdDmArmaUnicaAñadir(interaction) {
   if (!isDM(interaction.member))

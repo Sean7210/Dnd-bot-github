@@ -3,8 +3,9 @@
 // Se activa automáticamente ~cada 24h o el DM puede forzar uno
 // ─────────────────────────────────────────────────────────────────────────────
 
+const { getEvento, setEvento, deleteEvento } = require('../db/stateStore.js');
 const { EmbedBuilder } = require('discord.js');
-const { getAllCharacters, updateCharacter } = require('../utils/characterStore.js');
+const { getAllCharacters, updateCharacter } = require('../db/characterStore.js');
 const { isDM } = require('../utils/isDM.js');
 
 // ─── Catálogo de 35 eventos ───────────────────────────────────────────────────
@@ -125,7 +126,7 @@ const EVENTOS = [
 ];
 
 // Estado del evento activo
-const EVENTO_ACTIVO = new Map(); // guildId → { evento, expira, descuento }
+// EVENTO_ACTIVO → stateStore.js (persistente) // guildId → { evento, expira, descuento }
 
 // ─── Lanzar evento ────────────────────────────────────────────────────────────
 async function lanzarEventoAleatorio(client, guildId) {
@@ -134,7 +135,7 @@ async function lanzarEventoAleatorio(client, guildId) {
   const resultados = [];
 
   // Guardar evento activo (para descuentos etc)
-  EVENTO_ACTIVO.set(guildId, {
+  setEvento(guildId, {
     evento,
     expira: Date.now() + (evento.duracion || 24*60) * 60000,
     descuento: evento.tipoEvento === 'descuento' ? evento.valor : 0,
@@ -236,7 +237,7 @@ async function cmdEventoVer(interaction) {
 
 // Obtener descuento activo para la tienda
 function getDescuentoActivo(guildId) {
-  const activo = EVENTO_ACTIVO.get(guildId);
+  const activo = getEvento(guildId);
   if (!activo || Date.now() > activo.expira) return 0;
   return activo.descuento || 0;
 }

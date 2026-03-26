@@ -4,10 +4,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
-const { getCharacter, updateCharacter } = require('../utils/characterStore.js');
+const { getCharacter, updateCharacter } = require('../db/characterStore.js');
 const { POCIONES, POCIONES_POR_RAREZA } = require('../data/potions.js');
 const { totalEnPC, pagar, formatearMonedero } = require('../data/startingWealth.js');
-const { isDM } = require('./dmPanel.js');
+const { isDM } = require('../utils/isDM.js');
 
 // Estado de la tienda por servidor
 const TIENDAS_ALQUIMISTA = new Map(); // guildId → { abierta, rarezasDisponibles }
@@ -105,7 +105,7 @@ async function handleAlquimistaInteraction(interaction) {
 
     const opts = pociones.slice(0,25).map(p => ({
       label: p.nombre.slice(0,100),
-      description: `${p.precio} PO — ${p.efecto.slice(0,60)}`,
+      description: `${p.precio} PO — ${p.efecto.slice(0,60)}` || undefined,
       value: p.id,
     }));
 

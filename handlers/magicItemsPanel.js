@@ -9,7 +9,7 @@
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { OBJETOS_MAGICOS }  = require('../data/magicItemsList.js');
-const { getMagicItems, addMagicItem, removeMagicItem } = require('../utils/magicItemsStore.js');
+const { getMagicItems, addMagicItem, removeMagicItem } = require('../db/magicItemsStore.js');
 const { isDM } = require('./dmPanel.js');
 
 // ─── /mi-magia ────────────────────────────────────────────────────────────────

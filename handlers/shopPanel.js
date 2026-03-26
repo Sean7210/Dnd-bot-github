@@ -17,7 +17,7 @@ const {
   StringSelectMenuBuilder,
 } = require('discord.js');
 
-const { getCharacter, updateCharacter } = require('../utils/characterStore.js');
+const { getCharacter, updateCharacter } = require('../db/characterStore.js');
 const { ARMAS, ARMADURAS }              = require('../data/equipment.js');
 const { formatearMonedero, pagar, totalEnPC } = require('../data/startingWealth.js');
 const { isDM }                          = require('./dmPanel.js');
@@ -34,18 +34,18 @@ const SELECCION_PENDIENTE = new Map();
 
 // ─── Bar ──────────────────────────────────────────────────────────────────────
 const MENU_BAR = [
-  { nombre: 'Cerveza de taberna',      precio: 0.04, peso: 1,   categoria: 'Bebida' },
-  { nombre: 'Vino de mesa (jarra)',    precio: 0.02, peso: 1,   categoria: 'Bebida' },
-  { nombre: 'Vino añejo (botella)',    precio: 10,   peso: 1.5, categoria: 'Bebida' },
-  { nombre: 'Aguardiente enano',       precio: 2,    peso: 0.5, categoria: 'Bebida' },
-  { nombre: 'Hidromiel élfico',        precio: 0.5,  peso: 1,   categoria: 'Bebida' },
-  { nombre: 'Agua pura (cantimplora)', precio: 0.01, peso: 1,   categoria: 'Bebida' },
-  { nombre: 'Pan de posada',           precio: 0.02, peso: 0.5, categoria: 'Comida' },
-  { nombre: 'Queso curado',            precio: 0.1,  peso: 0.5, categoria: 'Comida' },
-  { nombre: 'Estofado de la casa',     precio: 0.1,  peso: 1,   categoria: 'Comida' },
-  { nombre: 'Asado de jabalí',         precio: 0.3,  peso: 1,   categoria: 'Comida' },
-  { nombre: 'Banquete (por persona)',  precio: 10,   peso: 0,   categoria: 'Comida' },
-  { nombre: 'Ración de viaje (1 día)', precio: 0.5,  peso: 2,   categoria: 'Comida' },
+  { nombre: 'Cerveza de taberna',      precio: 0.04, stat: 'CHA', bonus:  1, duracion: 180, efecto: '+1 CAR durante 3h. Te sueltas la lengua.' },
+  { nombre: 'Vino de mesa (jarra)',    precio: 0.02, stat: 'WIS', bonus: -1, duracion: 120, efecto: '-1 SAB durante 2h. El vino nubla el juicio.' },
+  { nombre: 'Vino añejo (botella)',    precio: 10,   stat: 'CHA', bonus:  2, duracion: 180, efecto: '+2 CAR durante 3h. Vino de calidad.' },
+  { nombre: 'Aguardiente enano',       precio: 2,    stat: 'BRUTE', bonus: 0, duracion: 180, efecto: '+4 FUE, -2 INT durante 3h. Fuerza bruta enana.' },
+  { nombre: 'Hidromiel élfico',        precio: 0.5,  stat: 'WIS', bonus:  1, duracion: 180, efecto: '+1 SAB durante 3h. Claridad feérica.' },
+  { nombre: 'Agua pura (cantimplora)', precio: 0.01, stat: null,  bonus:  0, duracion: 0,   efecto: 'Sin efecto especial. Solo hidratación.' },
+  { nombre: 'Pan de posada',           precio: 0.02, stat: null,  bonus:  0, duracion: 0,   efecto: 'Sin efecto especial. Llena el estómago.' },
+  { nombre: 'Queso curado',            precio: 0.1,  stat: 'CON', bonus:  1, duracion: 120, efecto: '+1 CON durante 2h. Nutritivo y consistente.' },
+  { nombre: 'Estofado de la casa',     precio: 0.1,  stat: 'CON', bonus:  1, duracion: 180, efecto: '+1 CON durante 3h. La especialidad del chef.' },
+  { nombre: 'Asado de jabalí',         precio: 0.3,  stat: 'STR', bonus:  1, duracion: 180, efecto: '+1 FUE durante 3h. Carne de caza reciente.' },
+  { nombre: 'Banquete (por persona)',  precio: 10,   stat: 'ALL', bonus:  1, duracion: 480, efecto: '+1 a TODO durante 8h. Festín completo.' },
+  { nombre: 'Ración de viaje (1 día)', precio: 0.5,  stat: null,  bonus:  0, duracion: 0,   efecto: 'Sin efecto. Sustento básico para el camino.' },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -86,6 +86,14 @@ function statModNum(v) {
   return Math.floor((v - 10) / 2);
 }
 
+// Munición (se vende de 20 en 20, precio en PP)
+const MUNICION_TIENDA = [
+  { nombre: 'Flechas',                    precioBase: 0.5,  peso: 1,   categoria: 'Munición', cantidad: 20, desc: 'Para arcos. Pack de 20.' },
+  { nombre: 'Virotes de ballesta',        precioBase: 0.5,  peso: 1.5, categoria: 'Munición', cantidad: 20, desc: 'Para ballestas. Pack de 20.' },
+  { nombre: 'Balas de honda',             precioBase: 0.04, peso: 1.5, categoria: 'Munición', cantidad: 20, desc: 'Para honda. Pack de 20.' },
+  { nombre: 'Agujas de cerbatana',        precioBase: 0.25, peso: 0.5, categoria: 'Munición', cantidad: 50, desc: 'Para cerbatana. Pack de 50.' },
+];
+
 function getCatalogoBase() {
   const items = [];
   for (const [nombre, data] of Object.entries(ARMAS)) {
@@ -95,6 +103,10 @@ function getCatalogoBase() {
   for (const [nombre, data] of Object.entries(ARMADURAS)) {
     const precio = parsearPrecio(data.coste);
     if (precio !== null) items.push({ nombre, precioBase: precio, precio, peso: parsearPeso(data.peso), categoria: 'Armadura', desc: `CA ${data.ca || '?'}` });
+  }
+  // Munición
+  for (const m of MUNICION_TIENDA) {
+    items.push({ ...m, precio: m.precioBase });
   }
   return items;
 }
@@ -411,21 +423,19 @@ async function ejecutarCompra(interaction) {
 
 // ─── /bar ─────────────────────────────────────────────────────────────────────
 async function cmdBar(interaction) {
-  const tienda = ESTADO_TIENDA.get(interaction.guildId);
-  if (!tienda?.bar) return interaction.reply({ content: '❌ El bar está cerrado.', ephemeral: true });
+  const local = LOCALES_ABIERTOS.get(interaction.channelId);
+  if (!local || local.tipo !== 'bar') return interaction.reply({ content: '❌ El bar está cerrado en este canal.', ephemeral: true });
 
-  const char  = require('../utils/characterStore.js').getCharacter(interaction.user.id);
+  const char  = require('../db/characterStore.js').getCharacter(interaction.user.id);
   const money = char?.money;
   const saldo = money ? Object.entries(money).filter(([,v])=>v>0).map(([k,v])=>v+' '+k).join(' ') : '—';
 
   const embed = new EmbedBuilder()
     .setTitle('🍺 Bar & Taberna')
     .setColor(0x8B4513)
-    .setDescription(`Tu saldo: **${saldo}**
-
-Todos los efectos duran **3 horas**. Elige qué tomar:`)
+    .setDescription('Tu saldo: **' + saldo + '**\n\nElige qué tomar (los efectos duran según el ítem):')
     .addFields(MENU_BAR.map(i => ({
-      name: `${i.nombre} — ${i.precio} PO`,
+      name: i.nombre + ' — ' + i.precio + ' PO',
       value: i.efecto,
       inline: true,
     })));
@@ -530,7 +540,7 @@ async function handleShopInteraction(interaction) {
   if (interaction.isStringSelectMenu() && interaction.customId === 'bar_pedir') {
     const nombre = interaction.values[0];
     const item   = MENU_BAR.find(i => i.nombre === nombre);
-    const char   = require('../utils/characterStore.js').getCharacter(interaction.user.id);
+    const char   = require('../db/characterStore.js').getCharacter(interaction.user.id);
     if (!item || !char) { await interaction.reply({ content: '❌ Error.', ephemeral: true }); return true; }
 
     const { totalEnPC, pagar, formatearMonedero } = require('../data/startingWealth.js');
@@ -541,7 +551,7 @@ async function handleShopInteraction(interaction) {
     }
 
     const nuevoMonedero = pagar(money, item.precio);
-    require('../utils/characterStore.js').updateCharacter(interaction.user.id, { money: nuevoMonedero });
+    require('../db/characterStore.js').updateCharacter(interaction.user.id, { money: nuevoMonedero });
 
     // Aplicar stats temporales
     if (item.stat === 'ALL') {
@@ -579,12 +589,68 @@ async function handleShopInteraction(interaction) {
 }
 
 
-// ─── MENÚ DEL BAR con estadísticas temporales ─────────────────────────────────
+
+// ─── STATS TEMPORALES (del bar) ───────────────────────────────────────────────
+const STATS_TEMP = new Map();
+
+function aplicarStatTemp(userId, stat, bonus, durMinutos) {
+  if (!STATS_TEMP.has(userId)) STATS_TEMP.set(userId, []);
+  const expira = Date.now() + durMinutos * 60000;
+  const arr = STATS_TEMP.get(userId);
+  arr.push({ stat, bonus, expira });
+  STATS_TEMP.set(userId, arr.filter(s => Date.now() < s.expira));
+}
+
+function getStatsTemp(userId) {
+  return (STATS_TEMP.get(userId) || []).filter(s => Date.now() < s.expira);
+}
+
+function getStatTempBonus(userId, stat) {
+  return getStatsTemp(userId)
+    .filter(s => s.stat === stat || s.stat === 'ALL')
+    .reduce((sum, s) => sum + s.bonus, 0);
+}
+
+// ─── /mi-dinero ───────────────────────────────────────────────────────────────
+async function cmdMiDinero(interaction) {
+  const char = require('../db/characterStore.js').getCharacter(interaction.user.id);
+  if (!char) return interaction.reply({ content: '❌ Sin personaje.', ephemeral: true });
+
+  const money = char.money || {};
+  const { totalEnPC, formatearMonedero } = require('../data/startingWealth.js');
+
+  const totalPC = totalEnPC(money);
+  const enPO = (totalPC / 100).toFixed(2);
+  const enPP = (totalPC / 10).toFixed(1);
+
+  const lineas = [];
+  if ((money.PT||0) > 0) lineas.push('🥇 **' + money.PT + ' PT** (Platino)');
+  if ((money.PO||0) > 0) lineas.push('🪙 **' + money.PO + ' PO** (Oro)');
+  if ((money.PE||0) > 0) lineas.push('🟡 **' + money.PE + ' PE** (Electrum)');
+  if ((money.PP||0) > 0) lineas.push('⚪ **' + money.PP + ' PP** (Plata)');
+  if ((money.PC||0) > 0) lineas.push('🟤 **' + money.PC + ' PC** (Cobre)');
+  if (!lineas.length) lineas.push('*Sin dinero*');
+
+  const embed = new EmbedBuilder()
+    .setTitle('💰 Monedero de ' + char.name)
+    .setColor(0xFFD700)
+    .setDescription(lineas.join('\n'))
+    .addFields(
+      { name: '📊 Equivalente total', value: '≈ **' + enPO + ' PO**\n≈ **' + enPP + ' PP**\n≈ **' + totalPC + ' PC**', inline: true },
+      { name: '📖 Conversión', value: '1 PT = 10 PO\n1 PO = 10 PP\n1 PP = 10 PC\n1 PE = 5 PC', inline: true },
+    )
+    .setFooter({ text: 'PT=Platino · PO=Oro · PE=Electrum · PP=Plata · PC=Cobre' });
+
+  await interaction.reply({ embeds: [embed], ephemeral: true });
+}
 
 module.exports = {
   cmdDmAbrirTienda, cmdDmCerrarTienda,
   cmdDmAbrirBar, cmdDmCerrarBar,
   cmdDmPrecioTienda,
   cmdTienda, cmdBar,
+  cmdMiDinero,
   handleShopInteraction,
+  aplicarStatTemp, getStatsTemp, getStatTempBonus,
+  MENU_BAR,
 };

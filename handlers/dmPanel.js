@@ -9,10 +9,12 @@ async function responder(interaction, payload) {
   return interaction.reply(payload);
 }
 const { isDM } = require('../utils/isDM.js');
-const { getCharacter, updateCharacter, getAllCharacters } = require('../utils/characterStore.js');
+const { getCharacter, updateCharacter, getAllCharacters } = require('../db/characterStore.js');
 const { formatearMonedero, monederoVacio, totalEnPC, pagar } = require('../data/startingWealth.js');
 const { calcHP } = require('../utils/helpers.js');
 const { CLASSES } = require('../data/classes.js');
+const { OBJETOS_MAGICOS } = require('../data/magicItemsList.js');
+const { TIPOS_VALE }    = require('../data/vales.js');
 
 // ─── /dm-personajes ───────────────────────────────────────────────────────────
 async function cmdDmPersonajes(interaction) {
@@ -83,7 +85,8 @@ async function cmdDmSubirNivel(interaction) {
 
   const nivelAntes = char.level || 1;
   const nivelNuevo = Math.min(20, nivelAntes + niveles);
-  const profBonus = Math.ceil(nivelNuevo/4)+1;
+  const cls        = CLASSES[char.class] || {};
+  const profBonus  = Math.ceil(nivelNuevo/4)+1;
   const tieneASI  = [4,8,12,16,19].includes(nivelNuevo) ||
     (char.class === 'Guerrero' && [6,10,14].includes(nivelNuevo)) ||
     (char.class === 'Pícaro'   && [10].includes(nivelNuevo));
@@ -97,7 +100,7 @@ async function cmdDmSubirNivel(interaction) {
     profBonus:      profBonus,
   };
 
-  const { saveCharacter } = require('../utils/characterStore.js');
+  const { saveCharacter } = require('../db/characterStore.js');
   saveCharacter(target.id, charActualizado, interaction.guildId);
 
   // Notificar logros y subclase
@@ -154,7 +157,7 @@ async function cmdDmAjustar(interaction) {
 
   const stats = { ...(char.finalStats||{}) };
   stats[stat] = valor;
-  const { saveCharacter } = require('../utils/characterStore.js');
+  const { saveCharacter } = require('../db/characterStore.js');
   saveCharacter(target.id, { ...char, finalStats:stats, stats }, interaction.guildId);
 
   await interaction.reply({ content:`✅ **${char.name}** — ${stat} ajustado a **${valor}**.`, ephemeral:true });
@@ -212,36 +215,145 @@ async function cmdDmRecompensar(interaction) {
     return interaction.reply({ content:'❌ Solo el DM.', ephemeral:true });
 
   const target = interaction.options.getUser('usuario');
-  const tipo   = interaction.options.getString('tipo'); // dinero | objeto | ticket | ticket-dorado
+  const tipo   = interaction.options.getString('tipo');
   const char   = getCharacter(target.id);
-  if (!char) return interaction.reply({ content:`❌ Sin personaje.`, ephemeral:true });
+  if (!char) return interaction.reply({ content:'❌ Sin personaje.', ephemeral:true });
 
+  // ── Dinero ────────────────────────────────────────────────────────────────
   if (tipo === 'dinero') {
     const cantidad = interaction.options.getInteger('cantidad') || 10;
     const moneda   = interaction.options.getString('moneda') || 'PO';
     const money    = { ...(char.money||monederoVacio()) };
     money[moneda]  = (money[moneda]||0) + cantidad;
     updateCharacter(target.id, { money });
-    await interaction.reply({ content:`✅ **${char.name}** recibe **${cantidad} ${moneda}**.` });
+    await interaction.reply({ content:'✅ **'+char.name+'** recibe **'+cantidad+' '+moneda+'**.' });
 
+  // ── Objeto mágico de la lista ─────────────────────────────────────────────
+  } else if (tipo === 'objeto-magico') {
+    const { StringSelectMenuBuilder, ActionRowBuilder } = require('discord.js');
+    const objetos = Object.entries(OBJETOS_MAGICOS).slice(0, 25);
+    const opts = objetos.map(([id, obj]) => ({
+      label: obj.nombre.slice(0, 100),
+      description: obj.desc?.slice(0, 100) || undefined,
+      value: String(id),
+    }));
+    await interaction.reply({
+      content: 'Elige el objeto mágico para **'+char.name+'**:',
+      components: [new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId('dm_recompensar_objeto_'+target.id)
+          .setPlaceholder('Selecciona un objeto mágico...')
+          .addOptions(opts)
+      )],
+      ephemeral: true,
+    });
+
+  // ── Objeto libre (texto) ──────────────────────────────────────────────────
   } else if (tipo === 'objeto') {
     const nombre = interaction.options.getString('objeto') || 'Objeto misterioso';
     const inv    = [...(char.inventory||[])];
     inv.push({ nombre, cantidad:1, peso:0, precio:0, categoria:'Recompensa DM' });
     updateCharacter(target.id, { inventory:inv });
-    await interaction.reply({ content:`✅ **${char.name}** recibe **${nombre}**.` });
+    await interaction.reply({ content:'✅ **'+char.name+'** recibe **'+nombre+'**.' });
 
-  } else if (tipo === 'ticket' || tipo === 'ticket-dorado') {
-    const esDorado = tipo === 'ticket-dorado';
-    const nomTicket = esDorado ? 'Ticket Dorado 🌟' : 'Ticket de Arma Única';
-    const inv = [...(char.inventory||[])];
-    inv.push({ nombre:nomTicket, cantidad:1, peso:0, precio:0, categoria:'Ticket', esTicket:true, esDorado });
-    updateCharacter(target.id, { inventory:inv });
-    await interaction.reply({ content:`✅ **${char.name}** recibe un **${nomTicket}**. Canjearlo con \`/canjear-ticket\`.` });
+  // ── Ticket / Vale ─────────────────────────────────────────────────────────
+  } else if (tipo === 'ticket') {
+    const { StringSelectMenuBuilder, ActionRowBuilder } = require('discord.js');
+    const todosVales = Object.entries(TIPOS_VALE);
+    const opts = todosVales.map(([nombre, data]) => ({
+      label: (data.emoji||'🎫') + ' ' + nombre,
+      description: (data.desc || data.tipoArma || undefined),
+      value: nombre,
+    }));
+    await interaction.reply({
+      content: 'Elige el ticket/vale para **'+char.name+'**:',
+      components: [new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId('dm_recompensar_ticket_'+target.id)
+          .setPlaceholder('Selecciona un ticket o vale...')
+          .addOptions(opts.slice(0, 25))
+      )],
+      ephemeral: true,
+    });
 
   } else {
     await interaction.reply({ content:'❌ Tipo de recompensa no reconocido.', ephemeral:true });
   }
+}
+
+// ─── Handler de selects de recompensa ────────────────────────────────────────
+async function handleRecompensaSelect(interaction) {
+  if (!interaction.isStringSelectMenu()) return false;
+  const id = interaction.customId || '';
+
+  if (id.startsWith('dm_recompensar_objeto_')) {
+    const targetId = id.replace('dm_recompensar_objeto_', '');
+    const char = getCharacter(targetId);
+    if (!char) { await interaction.update({ content:'❌ Personaje no encontrado.', components:[] }); return true; }
+
+    const objId = parseInt(interaction.values[0]);
+    const obj   = OBJETOS_MAGICOS[objId];
+    if (!obj)   { await interaction.update({ content:'❌ Objeto no encontrado.', components:[] }); return true; }
+
+    const inv = [...(char.inventory||[])];
+    inv.push({ nombre:obj.nombre, cantidad:1, peso:0, precio:0, categoria:'Objeto Mágico DM', descripcion:obj.desc, esMagico:true });
+    updateCharacter(targetId, { inventory:inv });
+
+    await interaction.update({
+      content: '✅ **'+char.name+'** recibe **'+obj.nombre+'**.\\n*'+obj.desc+'*',
+      components: [],
+    });
+
+    // Notificar al jugador
+    try {
+      const user = await interaction.client.users.fetch(targetId);
+      const { EmbedBuilder } = require('discord.js');
+      await user.send({ embeds:[new EmbedBuilder()
+        .setTitle('🎁 ¡Recibiste un objeto mágico!')
+        .setColor(0x9B59B6)
+        .setDescription('El DM te da **'+obj.nombre+'**.\n\n*'+obj.desc+'*')
+      ]});
+    } catch {}
+    return true;
+  }
+
+  if (id.startsWith('dm_recompensar_ticket_')) {
+    const targetId = id.replace('dm_recompensar_ticket_', '');
+    const char = getCharacter(targetId);
+    if (!char) { await interaction.update({ content:'❌ Personaje no encontrado.', components:[] }); return true; }
+
+    const nomTicket = interaction.values[0];
+    const valeData  = TIPOS_VALE[nomTicket];
+    const inv = [...(char.inventory||[])];
+    inv.push({
+      nombre:   nomTicket,
+      cantidad: 1, peso:0, precio:0,
+      categoria: 'Ticket',
+      esTicket: true,
+      esVale:   true,
+      tipoVale: valeData?.categoria || 'general',
+    });
+    updateCharacter(targetId, { inventory:inv });
+
+    await interaction.update({
+      content: '✅ **'+char.name+'** recibe **'+(valeData?.emoji||'🎫')+' '+nomTicket+'**.',
+      components: [],
+    });
+
+    // Notificar al jugador
+    try {
+      const user = await interaction.client.users.fetch(targetId);
+      const { EmbedBuilder } = require('discord.js');
+      await user.send({ embeds:[new EmbedBuilder()
+        .setTitle('🎫 ¡Recibiste un ticket!')
+        .setColor(0xF1C40F)
+        .setDescription('El DM te da **'+(valeData?.emoji||'🎫')+' '+nomTicket+'**.'+(valeData?.desc ? '\n\n*'+valeData.desc+'*' : ''))
+      ]});
+    } catch {}
+    return true;
+  }
+
+  return false;
 }
 
 // ─── /dm-inventario ──────────────────────────────────────────────────────────
@@ -344,9 +456,74 @@ async function cmdCurar(interaction) {
   await interaction.reply({ embeds:[embed] });
 }
 
+// ─── /dm-quitar-item ──────────────────────────────────────────────────────────
+async function cmdDmQuitarItem(interaction) {
+  if (!isDM(interaction.member))
+    return interaction.reply({ content:'❌ Solo el DM.', ephemeral:true });
+
+  const target  = interaction.options.getUser('usuario');
+  const busqueda = (interaction.options.getString('item') || '').trim().toLowerCase();
+  const cantidad = interaction.options.getInteger('cantidad') || 1;
+  const todo     = interaction.options.getBoolean('todo') || false;
+  const char     = getCharacter(target.id);
+
+  if (!char) return interaction.reply({ content:`❌ ${target.displayName} no tiene personaje.`, ephemeral:true });
+
+  const inv = [...(char.inventory || [])];
+  if (!inv.length) return interaction.reply({ content:`❌ **${char.name}** no tiene inventario.`, ephemeral:true });
+
+  // Buscar el ítem (búsqueda parcial)
+  const idx = inv.findIndex(i => (i.nombre||'').toLowerCase().includes(busqueda));
+  if (idx === -1) {
+    const lista = inv.map((i,n) => (n+1)+'. '+i.nombre+(i.cantidad>1?' ×'+i.cantidad:'')).join('\n').slice(0,800);
+    return interaction.reply({
+      content: `❌ No se encontró **"${busqueda}"** en el inventario de **${char.name}**.\n\n**Inventario actual:**\n${lista}`,
+      ephemeral: true,
+    });
+  }
+
+  const item = inv[idx];
+  const cantActual = item.cantidad || 1;
+  const cantQuitar = todo ? cantActual : Math.min(cantidad, cantActual);
+
+  if (todo || cantQuitar >= cantActual) {
+    inv.splice(idx, 1); // quitar ítem completamente
+  } else {
+    inv[idx] = { ...item, cantidad: cantActual - cantQuitar };
+  }
+
+  const { saveCharacter } = require('../db/characterStore.js');
+  saveCharacter(target.id, { ...char, inventory: inv }, interaction.guildId);
+
+  const embed = new EmbedBuilder()
+    .setTitle('🗑️ Ítem retirado')
+    .setColor(0xFF4444)
+    .setDescription(
+      `**${char.name}** — <@${target.id}>\n\n` +
+      `Eliminado: **${item.nombre}** × ${cantQuitar}\n` +
+      (todo ? '*(ítem eliminado completamente)*' : `Restantes: ${Math.max(0, cantActual - cantQuitar)}`) +
+      `\n\nInventario actualizado: ${inv.length} ítems.`
+    );
+
+  await interaction.reply({ embeds:[embed] });
+
+  // Notificar al jugador
+  try {
+    const user = await interaction.client.users.fetch(target.id);
+    await user.send({
+      embeds: [new EmbedBuilder()
+        .setTitle('🗑️ El DM retiró un ítem de tu inventario')
+        .setColor(0xFF4444)
+        .setDescription('El DM ha retirado **' + item.nombre + '** × ' + cantQuitar + ' de tu inventario.')
+      ]
+    });
+  } catch {}
+}
+
+
 module.exports = {
   isDM,
   cmdDmPersonajes, cmdDmFicha, cmdDmSubirNivel, cmdDmAjustar,
-  cmdDmDano, cmdDmCurar, cmdDmRecompensar,
-  cmdDmInventario, cmdInicio, cmdCurar,
+  cmdDmDano, cmdDmCurar, cmdDmRecompensar, handleRecompensaSelect,
+  cmdDmInventario, cmdInicio, cmdCurar, cmdDmQuitarItem,
 };

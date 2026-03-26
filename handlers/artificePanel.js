@@ -8,7 +8,7 @@
 const {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder,
 } = require('discord.js');
-const { getCharacter, updateCharacter, getAllCharacters } = require('../utils/characterStore.js');
+const { getCharacter, updateCharacter, getAllCharacters } = require('../db/characterStore.js');
 const { totalEnPC, pagar, formatearMonedero } = require('../data/startingWealth.js');
 const { isDM } = require('../utils/isDM.js');
 const { getSession } = require('../utils/sessions.js');
@@ -17,6 +17,29 @@ const TALLERES = new Map(); // guildId → { abierto, channelId, dmId }
 const MEJORAS_PENDIENTES = new Map(); // userId → { objeto, idxInv, precioFijado }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Color del embed según bonus mágico ──────────────────────────────────────
+function colorPorBonus(bonus) {
+  if (bonus <= 0)  return 0x95A5A6; // gris — sin mejora
+  if (bonus <= 2)  return 0xF1C40F; // amarillo — +1 a +2
+  if (bonus <= 4)  return 0x2ECC71; // verde — +3 a +4
+  if (bonus <= 6)  return 0x3498DB; // azul — +5 a +6
+  if (bonus <= 8)  return 0x9B59B6; // morado — +7 a +8
+  if (bonus <= 10) return 0xFF5733; // naranja — +9 a +10
+  if (bonus <= 12) return 0xFF0000; // rojo — +11 a +12
+  return 0xFFFFFF;                  // blanco — +13 o más (legendario)
+}
+
+function nombreBonusRareza(bonus) {
+  if (bonus <= 0)  return 'Normal';
+  if (bonus <= 2)  return '✨ Mágico';
+  if (bonus <= 4)  return '💎 Raro';
+  if (bonus <= 6)  return '🔷 Muy Raro';
+  if (bonus <= 8)  return '🟣 Épico';
+  if (bonus <= 10) return '🔶 Legendario';
+  if (bonus <= 12) return '🔴 Antiguo';
+  return '⬜ Divino';
+}
+
 function extraerBonus(nombre) {
   const m = (nombre||'').match(/\+(\d+)/);
   return m ? parseInt(m[1]) : 0;
@@ -247,33 +270,49 @@ async function handleArtificeroInteraction(interaction) {
     const inv    = [...(char.inventory || [])];
     const bonus  = extraerBonus(pendiente.objeto.nombre);
     const nuevoNombre = sumarBonus(pendiente.objeto.nombre, 2);
+    const bonusNuevo = bonus + 2;
     const itemActualizado = {
       ...inv[pendiente.idxInv],
-      nombre: nuevoNombre,
+      nombre:      nuevoNombre,
+      bonusMagico: bonusNuevo,   // usado por duelPanel y trainingPanel para ataque+daño
     };
     if (pendiente.caracteristica) {
       const caract = pendiente.caracteristica;
       itemActualizado.caracteristicas = [...(inv[pendiente.idxInv].caracteristicas||[]), caract];
+      // Parsear la característica para extraer el dado extra si lo tiene (ej: "Fuego 1d6")
+      const danoExtra = caract.match(/(\d+d\d+)/)?.[1] || null;
+      const tipoExtra = caract.match(/(fuego|veneno|hielo|rayo|acido|necrotico|radiante)/i)?.[1] || null;
+      if (danoExtra) itemActualizado.danoExtra = danoExtra;
+      if (tipoExtra) itemActualizado.tipoExtra = tipoExtra.toLowerCase();
       itemActualizado.descripcion = (inv[pendiente.idxInv].descripcion||'') + ' | ' + caract;
     }
     inv[pendiente.idxInv] = itemActualizado;
     updateCharacter(uid, { inventory: inv, money: nuevoMonedero });
 
     MEJORAS_PENDIENTES.delete(uid);
+    // Logro primera mejora
+    try { await otorgarLogro(interaction.client, interaction.guildId, uid, char.name, 'primera_mejora'); } catch {}
 
+    const objBase = inv[pendiente.idxInv]; // ya actualizado
+    const danoMostrar = objBase.daño || objBase.dano || '?';
     const embed = new EmbedBuilder()
-      .setTitle('⚙️ ¡Objeto mejorado!')
-      .setColor(0xF1C40F)
+      .setTitle('⚙️ ¡Objeto mejorado! — ' + nombreBonusRareza(bonusNuevo))
+      .setColor(colorPorBonus(bonusNuevo))
       .setDescription(
-        `El artificiero termina su trabajo.\n\n` +
-        `~~${pendiente.objeto.nombre}~~ → **${nuevoNombre}**\n` +
-        (pendiente.caracteristica ? `✨ Característica ganada: **${pendiente.caracteristica}**\n` : '') +
-        `\nPagaste **${pendiente.precioFijado} PO**. Saldo: ${formatearMonedero(nuevoMonedero)}\n\n` +
-        `**¿Quieres Retar al Destino?**\n` +
-        `• 🎲 **1** — Pierde TODAS las mejoras.\n` +
-        `• 🎲 **2–9** — Sin cambios.\n` +
-        `• 🎲 **10–19** — +1 adicional.\n` +
-        `• 🎲 **20** — La mejora se duplica.`
+        'El artificiero termina su trabajo.\n\n' +
+        '~~' + pendiente.objeto.nombre + '~~ → **' + nuevoNombre + '**\n' +
+        (pendiente.caracteristica ? '✨ Característica: **' + pendiente.caracteristica + '**\n' : '') +
+        (objBase.danoExtra ? '💥 Daño extra: **' + objBase.danoExtra + ' ' + (objBase.tipoExtra||'') + '** por ataque\n' : '') +
+        '\n**Stats del arma mejorada:**\n' +
+        '• Daño base: **' + danoMostrar + '**\n' +
+        '• Bonus mágico: **+' + bonusNuevo + '** (ataque y daño)\n' +
+        (objBase.danoExtra ? '• Daño extra: **' + objBase.danoExtra + ' ' + (objBase.tipoExtra||'') + '** adicional\n' : '') +
+        '\nPagaste **' + pendiente.precioFijado + ' PO**. Saldo: ' + formatearMonedero(nuevoMonedero) + '\n\n' +
+        '**¿Quieres Retar al Destino?**\n' +
+        '• 🎲 **1** — Pierde TODAS las mejoras.\n' +
+        '• 🎲 **2–9** — Sin cambios.\n' +
+        '• 🎲 **10–19** — +1 adicional.\n' +
+        '• 🎲 **20** — La mejora se duplica.'
       );
 
     // Guardar en sesión para el reto

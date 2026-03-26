@@ -15,8 +15,12 @@
 const {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder,
 } = require('discord.js');
-const { getCharacter, updateCharacter } = require('../utils/characterStore.js');
-const { ARMAS } = require('../data/equipment.js');
+const { getCharacter, updateCharacter, saveCharacter } = require('../db/characterStore.js');
+const { saveDuelo, loadDuelo, deleteDuelo, loadAllDuelos } = require('../db/stateStore.js');
+const { otorgarLogro } = require('./achievementsPanel.js');
+const { ARMAS }   = require('../data/equipment.js');
+const { HECHIZOS } = require('../data/spells.js');
+const { calcularSlots, calcularUpcast, CLASES_MAGICAS } = require('../data/spellSystem.js');
 
 // Munición y gasto
 // Arcos usan FLECHAS, ballestas usan VIROTES — separados y no intercambiables
@@ -69,8 +73,22 @@ const { formatearMonedero, totalEnPC, pagar } = require('../data/startingWealth.
 const { calcHP } = require('../utils/helpers.js');
 const { CLASSES } = require('../data/classes.js');
 
-// Estado de duelos activos: { [guildId]: DuelState }
+// Estado de duelos activos en memoria + SQLite (via stateStore)
 const DUELOS = new Map();
+
+// Helpers de acceso al Map + persistencia
+function setDuelo(guildId, estado) {
+  DUELOS.set(guildId, estado);
+  saveDuelo(guildId, estado);
+}
+function getDuelo(guildId) {
+  return DUELOS.get(guildId) || null;
+}
+function borrarDuelo(guildId) {
+  DUELOS.delete(guildId);
+  deleteDuelo(guildId);
+}
+
 // Acciones pendientes de modal: { [userId]: { guildId, tipo, arma, hechizo, objetivoUid } }
 const PENDIENTE_MODAL = new Map();
 
@@ -116,9 +134,79 @@ const HECHIZOS_CLASE = {
 };
 
 function getHechizosClase(clase, nivel) {
-  const lista = HECHIZOS_CLASE[clase] || [];
-  // Filtrar por nivel mínimo aproximado
-  return lista.filter(h => !(h.usos !== undefined && nivel < 5));
+  // Fallback a lista hardcoded
+  return (HECHIZOS_CLASE[clase] || []).filter(h => !(h.usos !== undefined && nivel < 5));
+}
+
+// Obtener hechizos de combate del personaje usando su magia real
+function getHechizosPersonaje(char) {
+  if (!char.magia || !CLASES_MAGICAS.has(char.class)) return getHechizosClase(char.class, char.level||1);
+  const nivel   = char.level || 1;
+  const slots   = calcularSlots(char.class, nivel);
+  const magia   = char.magia;
+  const stats   = char.finalStats || {};
+  const CAST_STAT = { Mago:'INT', Hechicero:'CHA', Brujo:'CHA', Bardo:'CHA', Clérigo:'WIS', Druida:'WIS', Paladín:'CHA', Explorador:'WIS', Artificiero:'INT' };
+  const castStatMap = { INT: stats.INT??10, WIS: stats.WIS??10, CHA: stats.CHA??10 };
+  const castKey = CAST_STAT[char.class];
+  const modCast = castKey ? Math.floor((castStatMap[castKey]??10)-10)/2 : 0;
+  const cd      = 8 + Math.ceil(nivel/4)+1 + modCast;
+
+  const resultado = [];
+
+  // Trucos (no gastan slots)
+  for (const nombre of (magia.trucos||[])) {
+    const h = HECHIZOS[nombre];
+    if (!h) continue;
+    // Solo trucos de daño o utilidad en combate
+    const danoMatch = h.desc?.match(/(\d+d\d+)\s+(?:de\s+)?(?:daño|damage)/i);
+    resultado.push({
+      nombre, tipo: h.escuela, cd: false, slot: 0,
+      daño: danoMatch ? danoMatch[1] : '1d6',
+      esTruco: true, usosRestantes: 999,
+    });
+  }
+
+  // Hechizos conocidos que tienen daño (para combate)
+  for (const nombre of (magia.hechizos||[])) {
+    const h = HECHIZOS[nombre];
+    if (!h) continue;
+    // Buscar dado de daño en descripción
+    const danoMatch = h.desc?.match(/(\d+d\d+)\s+(?:de\s+)?(?:daño|damage|perforante|cortante|contundente|fuego|frío|relámpago|ácido|veneno|psíquico|necrótico|fuerza|radiante|trueno)/i);
+    const tieneTS   = /salvación|tirada de salvación/i.test(h.desc||'');
+    const tieneAtk  = /ataque de conjuro|ataque\s+a\s+distancia/i.test(h.desc||'');
+    // Solo incluir si hace daño o tiene efecto de combate obvio
+    if (!danoMatch && !tieneTS && !tieneAtk && !/(incapacitad|paraliz|dormid|asustado|cegado)/i.test(h.desc||'')) continue;
+
+    // Slots disponibles para este hechizo
+    let slotsDisp = 0;
+    if (slots?.tipo === 'pact') {
+      slotsDisp = magia.slotsActuales?.pact ?? 0;
+    } else {
+      slotsDisp = magia.slotsActuales?.[h.nivel] ?? 0;
+      // También contar slots de nivel superior
+      if (slotsDisp <= 0) {
+        for (let n = h.nivel+1; n <= 9; n++) {
+          if ((magia.slotsActuales?.[n]||0) > 0) { slotsDisp = magia.slotsActuales[n]; break; }
+        }
+      }
+    }
+    if (slotsDisp <= 0) continue; // sin slots disponibles
+
+    resultado.push({
+      nombre, tipo: h.escuela,
+      cd: tieneTS,
+      slot: h.nivel,
+      daño: danoMatch ? danoMatch[1] : '1d8',
+      concentracion: h.concentracion,
+      desc_corta: h.desc?.slice(0,100),
+      usosRestantes: slotsDisp,
+      esTruco: false,
+    });
+  }
+
+  // Si no tiene hechizos reales, usar fallback hardcoded
+  if (resultado.length === 0) return getHechizosClase(char.class, nivel);
+  return resultado;
 }
 
 // Crear estado de combatiente a partir de personaje
@@ -172,8 +260,8 @@ function crearCombatiente(uid, char) {
     modDexFinal += Math.floor(getStatTempBonus(uid,'DEX')/2);
   } catch {}
 
-  // Bonus mágico del arma (+1, +2, etc.) — va al ataque y daño, NO a la CA
-  const bonusArmaM = (() => { const m=(arma.nombre||'').match(/\+(\d+)/); return m?parseInt(m[1]):0; })();
+  // Bonus mágico del arma: leer del campo bonusMagico (artificiero) o del nombre (+1,+2)
+  const bonusArmaM = armaInv?.bonusMagico ?? (() => { const m=(arma.nombre||'').match(/\+(\d+)/); return m?parseInt(m[1]):0; })();
 
   const modAtk = (esDistArma ? modDexFinal : modStrFinal) + bonusArmaM;
   const modStr = modStrFinal, modDex = modDexFinal;
@@ -188,11 +276,11 @@ function crearCombatiente(uid, char) {
   const modCast     = castStatKey ? Math.floor((castStatMap[castStatKey]??10)-10)/2 : 0;
   const cdHechizo   = 8 + prof + modCast;
 
-  // Hechizos disponibles con usos restantes
-  const hechizosBase = getHechizosClase(char.class, nivel);
+  // Hechizos: usar los del personaje si tiene magia inicializada, si no fallback
+  const hechizosBase = char.magia ? getHechizosPersonaje(char) : getHechizosClase(char.class, nivel);
   const hechizos     = hechizosBase.map(h => ({
     ...h,
-    usosRestantes: h.usos ?? 999,
+    usosRestantes: h.usosRestantes ?? (h.usos ?? 999),
     modCast, cdHechizo,
   }));
 
@@ -234,7 +322,7 @@ async function cmdDuelo(interaction) {
   if (errorApuesta) return interaction.reply({ content: errorApuesta, ephemeral: true });
 
   // Guardar reto pendiente
-  DUELOS.set(guildId, {
+  setDuelo(guildId, {
     fase: 'reto',
     retadorId: uid, rivalId: rival.id,
     apTipo, apValor,
@@ -283,7 +371,7 @@ async function cmdDuelo2v2(interaction) {
   if (chars.some(c => !c))
     return interaction.reply({ content: '❌ Algún participante no tiene personaje.', ephemeral: true });
 
-  DUELOS.set(guildId, {
+  setDuelo(guildId, {
     fase: 'reto_2v2',
     equipo1: [uid, aliado.id],
     equipo2: [rival1.id, rival2.id],
@@ -314,7 +402,7 @@ async function cmdDuelo2v2(interaction) {
 // ─── /apostar ────────────────────────────────────────────────────────────────
 async function cmdApostar(interaction) {
   const guildId = interaction.guildId;
-  const duelo   = DUELOS.get(guildId);
+  const duelo   = getDuelo(guildId);
 
   if (!duelo || duelo.fase !== 'apuestas')
     return interaction.reply({ content: '❌ No hay duelo en fase de apuestas ahora mismo.', ephemeral: true });
@@ -349,7 +437,7 @@ async function cmdApostar(interaction) {
 
 // ─── Iniciar duelo (después de aceptar) ───────────────────────────────────────
 async function iniciarDuelo(client, guildId) {
-  const duelo = DUELOS.get(guildId);
+  const duelo = getDuelo(guildId);
   if (!duelo) return;
 
   try {
@@ -410,7 +498,7 @@ async function iniciarDuelo(client, guildId) {
 }
 
 async function comenzarCombate(client, guildId) {
-  const duelo = DUELOS.get(guildId);
+  const duelo = getDuelo(guildId);
   if (!duelo) return;
   duelo.fase = 'combate';
   clearTimeout(duelo.timer);
@@ -439,7 +527,7 @@ async function comenzarCombate(client, guildId) {
 }
 
 async function mostrarTurnoCombate(client, guildId) {
-  const duelo = DUELOS.get(guildId);
+  const duelo = getDuelo(guildId);
   if (!duelo || duelo.fase !== 'combate') return;
 
   const _g = client.guilds.cache.get(guildId);
@@ -473,49 +561,61 @@ async function mostrarTurnoCombate(client, guildId) {
 
   const barra = (hp, max) => '█'.repeat(Math.round(Math.max(0,hp/max)*10)) + '░'.repeat(10-Math.round(Math.max(0,hp/max)*10));
 
-  const embed = new EmbedBuilder()
-    .setTitle(`⚔️ Ronda ${duelo.ronda} — Turno de ${activo.nombre}`)
+  // ── 1. Mensaje PÚBLICO en #duelos — solo estado, sin botones ─────────────
+  const embedPublico = new EmbedBuilder()
+    .setTitle('⚔️ Ronda ' + duelo.ronda + ' — Turno de ' + activo.nombre)
     .setColor(0xCC2200)
-    .setDescription(`<@${activo.uid}> elige tu acción:`)
+    .setDescription('*<@' + activo.uid + '> está eligiendo su acción...*')
     .addFields(
       ...duelo.combatientes.map(c => ({
-        name: `${c.hp > 0 ? '❤️' : '💀'} ${c.nombre}`,
-        value: '`' + barra(c.hp,c.hpMax) + '` ' + c.hp + '/' + c.hpMax + ' HP · CA ' + c.ca,
+        name: (c.hp > 0 ? '❤️' : '💀') + ' ' + c.nombre,
+        value: '`' + barra(c.hp,c.hpMax) + '` ' + c.hp + '/' + c.hpMax + ' HP',
         inline: true,
       }))
     );
 
   if (duelo.log.length > 0)
-    embed.addFields({ name: '📜 Último turno', value: duelo.log.slice(-4).join('\n').slice(0,1024), inline: false });
+    embedPublico.addFields({ name: '📜 Último turno', value: duelo.log.slice(-4).join('\n').slice(0,1024), inline: false });
 
-  // Preview de daño del arma
+  await channel.send({ embeds: [embedPublico] });
+
+  // ── 2. DM PRIVADO al jugador activo — sus opciones + botones ─────────────
   const p    = activo.parsedDaño;
   const dmin = p.dados + p.bonus + activo.modAtk;
   const dmax = p.dados*p.lados + p.bonus + activo.modAtk;
-  embed.addFields({ name: '🎲 Tu arma', value:
-    activo.arma.nombre + ' | Ataque: 1d20 ' + (activo.bonoAtaque>=0?'+':'') + activo.bonoAtaque + ' | Daño: **' + dmin + '–' + dmax + '**',
-    inline: false });
 
-  // Hechizos disponibles
   const hechizosDisp = (activo.hechizos||[]).filter(h => h.usosRestantes > 0);
+  const enemigos     = duelo.combatientes.filter(c => c.hp > 0 && c.uid !== activo.uid);
+  const charReal     = getCharacter(activo.uid);
+
+  const embedPrivado = new EmbedBuilder()
+    .setTitle('⚔️ Tu turno — Ronda ' + duelo.ronda)
+    .setColor(0x4169E1)
+    .setDescription('Elige tu acción para el duelo en **#duelos**.')
+    .addFields(
+      ...duelo.combatientes.map(c => ({
+        name: (c.hp > 0 ? '❤️' : '💀') + ' ' + c.nombre,
+        value: '`' + barra(c.hp,c.hpMax) + '` ' + c.hp + '/' + c.hpMax + ' HP · CA ' + c.ca,
+        inline: true,
+      })),
+      { name: '🗡️ Tu arma', value: activo.arma.nombre + ' | 1d20+' + activo.bonoAtaque + ' | Daño: ' + dmin + '–' + dmax, inline: false },
+    );
+
   if (hechizosDisp.length > 0) {
-    const hStr = hechizosDisp.map(h => {
-      const pd = parseDaño(h.daño);
-      const dh_min = pd.dados + pd.bonus;
-      const dh_max = pd.dados*pd.lados + pd.bonus;
-      return h.nombre + ' (' + h.daño + ' ' + h.tipo + (h.cd ? ' CD' + activo.cdHechizo : '') + (h.usos ? ' · ' + h.usosRestantes + ' uso/s' : '') + ')';
-    }).join('\n');
-    embed.addFields({ name: '✨ Hechizos', value: hStr, inline: false });
+    // Mostrar slots actuales del personaje
+    const slotsStr = charReal?.magia?.slotsActuales
+      ? Object.entries(charReal.magia.slotsActuales).filter(([k,v])=>v>0&&!isNaN(k)).map(([k,v])=>'Nv'+k+':'+v).join(' · ')
+      : null;
+    const hStr = hechizosDisp.map(h =>
+      '✨ ' + h.nombre + ' (' + h.daño + ' ' + h.tipo + (h.cd ? ' — tirada de salvación' : ' — ataque') + ')'
+    ).join('\n');
+    embedPrivado.addFields({ name: '🔮 Hechizos disponibles' + (slotsStr ? ' [' + slotsStr + ']' : ''), value: hStr, inline: false });
   }
 
-  const enemigos = duelo.combatientes.filter(c => c.hp > 0 && c.uid !== activo.uid);
-
-  // ── Filas de botones ───────────────────────────────────────────────────────
+  // Botones: atacar (uno por enemigo) + defender + hechizos
   const rows = [];
-
-  // Fila 1: botón por cada enemigo + Defender
   const fila1 = [];
-  enemigos.slice(0,4).forEach(e => {
+  enemigos.slice(0,3).forEach(e => {
     fila1.push(new ButtonBuilder()
       .setCustomId('duelo_sel_objetivo_' + activo.uid + '_' + e.uid)
       .setLabel('⚔️ Atacar a ' + e.nombre + ' (' + e.hp + ' HP)')
@@ -527,18 +627,23 @@ async function mostrarTurnoCombate(client, guildId) {
     .setStyle(ButtonStyle.Secondary));
   rows.push(new ActionRowBuilder().addComponents(...fila1.slice(0,5)));
 
-  // Fila 2: hechizos como botones de selección
   if (hechizosDisp.length > 0) {
     const filaH = hechizosDisp.slice(0,4).map((h, i) =>
       new ButtonBuilder()
-        .setCustomId('duelo_sel_hechizo_' + activo.uid + '_' + i)
-        .setLabel('✨ ' + h.nombre + (h.usos ? ' (' + h.usosRestantes + ')' : ''))
+        .setCustomId('duelo_sel_hechizo_' + activo.uid + '_' + i + '_' + enemigos[0]?.uid)
+        .setLabel('✨ ' + h.nombre + (h.esTruco ? ' (truco)' : ' (slot ' + (h.slot||1) + ')'))
         .setStyle(ButtonStyle.Primary)
     );
     rows.push(new ActionRowBuilder().addComponents(...filaH));
   }
 
-  await channel.send({ content: '<@' + activo.uid + '>', embeds: [embed], components: rows });
+  try {
+    const user = await client.users.fetch(activo.uid);
+    await user.send({ embeds: [embedPrivado], components: rows });
+  } catch {
+    // Si no puede mandar DM, enviar efímero en el canal con mención
+    await channel.send({ content: '<@' + activo.uid + '> ⚠️ No puedo enviarte un DM. Habilita mensajes directos del servidor para poder jugar el duelo.' });
+  }
 }
 
 // ─── Resolver acción de combate ───────────────────────────────────────────────
@@ -568,8 +673,8 @@ function resolverAtaque(activo, objetivo, log) {
 }
 
 function resolverHechizo(activo, objetivo, hechizo, log) {
-  const pd    = parseDaño(hechizo.daño);
-  const r     = tirarDaño(pd, 0);
+  const pd    = parseDaño(hechizo.daño || '1d6');
+  const r     = tirarDaño(pd, activo.modCast || 0);
   const daño  = Math.max(1, r.total);
 
   if (hechizo.cd) {
@@ -593,7 +698,8 @@ function resolverHechizo(activo, objetivo, hechizo, log) {
     const bono  = activo.prof + activo.modCast;
     const total = dado + bono;
     const caObj = objetivo.ca + (objetivo.defensa ? 2 : 0);
-    log.push('✨ **' + activo.nombre + '** lanza **' + hechizo.nombre + '**: 🎲 1d20(' + dado + ') ' + (bono>=0?'+':'') + bono + ' = **' + total + '** vs CA ' + caObj);
+    const upcastInfo = hechizo.slot && !hechizo.esTruco ? calcularUpcast(hechizo.nombre, hechizo.slot) : null;
+    log.push('✨ **' + activo.nombre + '** lanza **' + hechizo.nombre + '**' + (upcastInfo ? ' (slot ' + hechizo.slot + ')' : '') + ': 🎲 1d20(' + dado + ') ' + (bono>=0?'+':'') + bono + ' = **' + total + '** vs CA ' + caObj);
     if (dado === 20) {
       objetivo.hp = Math.max(0, objetivo.hp - daño * 2);
       log.push('  🎯 **¡CRÍTICO MÁGICO!** **' + daño*2 + '** ' + hechizo.tipo + ' — ' + objetivo.nombre + ': ' + objetivo.hp + '/' + objetivo.hpMax + ' HP');
@@ -606,14 +712,37 @@ function resolverHechizo(activo, objetivo, hechizo, log) {
     }
   }
 
-  if (hechizo.usos) hechizo.usosRestantes = Math.max(0, hechizo.usosRestantes - 1);
+  // Gastar slot real si el personaje tiene magia
+  if (!hechizo.esTruco) {
+    hechizo.usosRestantes = Math.max(0, hechizo.usosRestantes - 1);
+    // Actualizar slots en el personaje real
+    try {
+      const { getCharacter, saveCharacter } = require('../db/characterStore.js');
+      const charReal = getCharacter(activo.uid);
+      if (charReal?.magia) {
+        const slotUsado = hechizo.slot || 1;
+        if (activo.clase === 'Brujo') {
+          charReal.magia.slotsActuales.pact = Math.max(0, (charReal.magia.slotsActuales.pact||0) - 1);
+        } else {
+          // Gastar el slot de nivel más bajo disponible que cubra el hechizo
+          for (let n = slotUsado; n <= 9; n++) {
+            if ((charReal.magia.slotsActuales[n]||0) > 0) {
+              charReal.magia.slotsActuales[n]--;
+              break;
+            }
+          }
+        }
+        saveCharacter(activo.uid, charReal, null);
+      }
+    } catch {}
+  }
 }
 
 async function handleDueloCombateSelect(interaction) {
   const id      = interaction.customId;
   const uid     = interaction.user.id;
   const guildId = interaction.guildId;
-  const duelo   = DUELOS.get(guildId);
+  const duelo   = getDuelo(guildId);
 
   // Solo procesar botones y selects de duelo de combate
   const esBtnSelObjetivo = interaction.isButton() && id.startsWith('duelo_sel_objetivo_');
@@ -636,6 +765,12 @@ async function handleDueloCombateSelect(interaction) {
 
   // ── Selección de objetivo → mostrar armas del inventario ─────────────────────
   if (esBtnSelObjetivo) {
+    // Verificar que el botón lo pulsa el jugador activo (uid embebido en el customId)
+    const activoUid = id.split('_')[3]; // duelo_sel_objetivo_{activoUid}_{objetivoUid}
+    if (activoUid && activoUid !== uid) {
+      await interaction.reply({ content: '❌ Ese botón no es tuyo.', ephemeral: true });
+      return true;
+    }
     const parts       = id.split('_');
     const objetivoUid = parts[parts.length - 1];
     const objetivo    = duelo.combatientes.find(c => c.uid === objetivoUid && c.hp > 0);
@@ -789,6 +924,8 @@ async function handleDueloCombateSelect(interaction) {
     log.push('🎲 Tirada de ataque: d20(**' + dado20 + '**) + ' + bono + ' = **' + total + '** vs CA ' + caObj);
 
     if (dado20 === 20) {
+      // Logro crítico
+      try { await otorgarLogro(client, guildId, activo.uid, activo.nombre, 'primer_critico'); } catch {}
       // ── Crítico: doble dado de daño ────────────────────────────
       const r1 = tirarDaño(pd, actTirar.modAtk), r2 = tirarDaño(pd, actTirar.modAtk);
       const danoCrit = r1.total + r2.total;
@@ -822,14 +959,16 @@ async function handleDueloCombateSelect(interaction) {
     duelo.turnoActual = (duelo.turnoActual + 1) % duelo.combatientes.length;
     if (duelo.turnoActual === 0) duelo.ronda++;
 
-    await interaction.update({ content: '✅ Dado tirado.', embeds: [], components: [] });
+    // Actualizar DM del jugador (cerrar los botones)
+    await interaction.update({ content: '✅ Acción resuelta. Resultado publicado en #duelos.', embeds: [], components: [] });
+    // Publicar resultado en el canal público
     await mostrarTurnoCombate(interaction.client, guildId);
     return true;
   }
 
   const activo = duelo.combatientes[duelo.turnoActual];
   if (activo.uid !== uid) {
-    await interaction.reply({ content: '❌ No es tu turno.', ephemeral: true });
+    await interaction.reply({ content: '❌ No es tu turno. Espera a que ' + activo.nombre + ' actúe.', ephemeral: true });
     return true;
   }
 
@@ -900,9 +1039,9 @@ async function handleDueloCombateSelect(interaction) {
 
 // ─── Terminar duelo ───────────────────────────────────────────────────────────
 async function terminarDuelo(client, guildId) {
-  const duelo = DUELOS.get(guildId);
+  const duelo = getDuelo(guildId);
   if (!duelo) return;
-  DUELOS.delete(guildId);
+  deleteDuelo(guildId);
 
   try {
     const _guild = client.guilds.cache.get(guildId);
@@ -926,6 +1065,19 @@ async function terminarDuelo(client, guildId) {
     const ganadorUid   = ganadores[0];
     const perdedorUid  = perdedores[0];
     const charGanador  = getCharacter(ganadorUid);
+
+    // Logros de duelo
+    try {
+      if (ganadorUid && charGanador) {
+        await otorgarLogro(client, guildId, ganadorUid, charGanador.name, 'ganar_duelo');
+        await otorgarLogro(client, guildId, ganadorUid, charGanador.name, 'matar_enemigo');
+      }
+      const charPerdedor = getCharacter(perdedorUid);
+      if (perdedorUid && charPerdedor) {
+        await otorgarLogro(client, guildId, perdedorUid, charPerdedor.name, 'perder_duelo');
+        await otorgarLogro(client, guildId, perdedorUid, charPerdedor.name, 'primer_cero_hp');
+      }
+    } catch {}
 
     // Recuperar armas arrojadizas del ganador (excepto las pifiadas)
     for (const comb of duelo.combatientes) {
@@ -1077,7 +1229,7 @@ async function handleDueloInteraction(interaction) {
       return true;
     }
 
-    const duelo = DUELOS.get(interaction.guildId);
+    const duelo = getDuelo(interaction.guildId);
     if (!duelo || duelo.fase !== 'reto') {
       await interaction.update({ content: '❌ El duelo ya no está disponible.', embeds: [], components: [] });
       return true;
@@ -1096,14 +1248,14 @@ async function handleDueloInteraction(interaction) {
 
   // Rechazar duelo
   if (interaction.isButton() && id.startsWith('duelo_rechazar_')) {
-    DUELOS.delete(interaction.guildId);
+    borrarDuelo(interaction.guildId);
     await interaction.update({ content: `❌ <@${interaction.user.id}> rechazó el duelo.`, embeds: [], components: [] });
     return true;
   }
 
   // Aceptar duelo 2v2
   if (interaction.isButton() && id.startsWith('duelo2v2_aceptar_')) {
-    const duelo = DUELOS.get(interaction.guildId);
+    const duelo = getDuelo(interaction.guildId);
     if (!duelo || duelo.fase !== 'reto_2v2') return false;
     duelo.pendientesAcepcion.delete(interaction.user.id);
     if (duelo.pendientesAcepcion.size === 0) {
@@ -1117,7 +1269,7 @@ async function handleDueloInteraction(interaction) {
 
   // Rechazar 2v2
   if (interaction.isButton() && id.startsWith('duelo2v2_rechazar_')) {
-    DUELOS.delete(interaction.guildId);
+    borrarDuelo(interaction.guildId);
     await interaction.update({ content: `❌ El duelo 2v2 fue rechazado.`, embeds: [], components: [] });
     return true;
   }
@@ -1147,3 +1299,13 @@ async function handleDueloInteraction(interaction) {
 }
 
 module.exports = { cmdDuelo, cmdDuelo2v2, cmdApostar, handleDueloInteraction };
+
+// ─── Restaurar duelos activos desde DB al arrancar ────────────────────────────
+function restaurarDuelos() {
+  const { loadAllDuelos } = require('../db/stateStore.js');
+  const activos = loadAllDuelos();
+  for (const { guildId, estado } of activos) {
+    DUELOS.set(guildId, estado);
+  }
+  if (activos.length) console.log('[Duelos] ✅ Restaurados', activos.length, 'duelos activos');
+}

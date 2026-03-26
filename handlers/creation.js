@@ -16,7 +16,7 @@ const { IDIOMAS_POR_RAZA, IDIOMAS_ELECCION_RAZA, IDIOMAS_POR_TRASFONDO, TODOS_ID
 
 const { statMod, calcHP, applyRacialBonuses, getCategoryEmoji, buildCharacterEmbed, safeUpdate, rollDice, racaNecesitaEleccionBonus, getBonusAnyInfo } = require('../utils/helpers.js');
 const { getSession, deleteSession } = require('../utils/sessions.js');
-const { saveCharacter } = require('../utils/characterStore.js');
+const { saveCharacter } = require('../db/characterStore.js');
 const { showStatsAssign, handleStatsAssignInteraction } = require('./statsAssign.js');
 
 // Módulos separados

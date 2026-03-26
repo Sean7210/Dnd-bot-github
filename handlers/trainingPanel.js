@@ -2,9 +2,11 @@
 const {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder,
 } = require('discord.js');
-const { getCharacter, updateCharacter } = require('../utils/characterStore.js');
+const { getCharacter, updateCharacter } = require('../db/characterStore.js');
 const { getSession }   = require('../utils/sessions.js');
 const { rollDice, calcHP } = require('../utils/helpers.js');
+const { HECHIZOS } = require('../data/spells.js');
+const { calcularSlots, CLASES_MAGICAS } = require('../data/spellSystem.js');
 const { ARMAS }  = require('../data/equipment.js');
 
 // Munición necesaria por tipo de arma (nombre normalizado → nombre del item de munición)
@@ -190,6 +192,7 @@ function iniciarCombate(char, arma, modo) {
 
   return {
     modo, char:char.name, clase:char.class, nivel:char.level||1, charUid: char._uid || '',
+    _guildId: null, // se asigna en cmdEntrenar
     // CA = 10 + mod DEX (+ armadura si la tiene) — los +X del arma NO afectan la CA
     jugador: { hp:hpMax, hpMax, ca:10+Math.floor(((stats.DEX??10)-10)/2) },
     enemigos, arma, esDist, modAtk,
@@ -227,6 +230,18 @@ function buildEmbed(est) {
   if (est.log.length) embed.addFields({ name:'📜 Turno', value:est.log.slice(-6).join('\n').slice(0,1024), inline:false });
 
   embed.addFields({ name:`🎲 ${tipo}`, value:`1d20 ${est.bonoAtaque>=0?'+':''}${est.bonoAtaque} | Daño: **${dmin}–${dmax}**`, inline:false });
+
+  // Mostrar slots disponibles si es clase lanzadora
+  if (CLASES_MAGICAS.has(est.clase)) {
+    const char = est._charRef;
+    if (char?.magia?.slotsActuales) {
+      const slotsStr = Object.entries(char.magia.slotsActuales)
+        .filter(([k,v]) => v > 0 && !isNaN(k))
+        .map(([k,v]) => `Nv${k}:${v}`)
+        .join(' · ') || 'Sin slots';
+      embed.addFields({ name:'🔮 Slots disponibles', value:slotsStr, inline:false });
+    }
+  }
   return embed;
 }
 
@@ -304,7 +319,7 @@ function atacarJugador(est, tipo) {
             newInv[idx] = { ...newInv[idx], cantidad: cantActual - 1 };
             est.log.push('🏹 *Lanzas **' + est.arma.nombre + '**. Quedan ' + (cantActual-1) + '.*');
           }
-          const { updateCharacter } = require('../utils/characterStore.js');
+          const { updateCharacter } = require('../db/characterStore.js');
           updateCharacter(char._uid || '', { inventory: newInv });
           char.inventory = newInv;
         }
@@ -436,6 +451,13 @@ async function handleTrainingInteraction(interaction) {
   const vivosP=est.enemigos.filter(e=>e.hp>0), fin=est.jugador.hp<=0||vivosP.length===0;
   if (est.jugador.hp<=0) est.log.push('💀 ¡Has caído!');
   if (vivosP.length===0) {
+    // Logros de victoria
+    try {
+      const char = est._charRef || getCharacter(uid);
+      if (char) {
+        await otorgarLogro(est._client||null, est._guildId||null, uid, char.name, 'matar_enemigo');
+      }
+    } catch {}
     est.log.push('🎉 ¡Victoria!');
     // Recuperar armas arrojadizas tras la victoria
     if (est._armaArrojadizaUsada && est._charRef && (est._arrojadasLanzadas||0) > 0) {
@@ -448,7 +470,7 @@ async function handleTrainingInteraction(interaction) {
       } else {
         inv.push({ nombre: est.arma.nombre, cantidad: cantRec, peso:1, precio:0, categoria:'Equipo inicial' });
       }
-      const { updateCharacter } = require('../utils/characterStore.js');
+      const { updateCharacter } = require('../db/characterStore.js');
       updateCharacter(char._uid||'', { inventory: inv });
       char.inventory = inv;
       est.log.push('🔄 Recuperas **' + cantRec + '** ' + est.arma.nombre + (cantRec>1?'s':'') + ' del campo de batalla.');

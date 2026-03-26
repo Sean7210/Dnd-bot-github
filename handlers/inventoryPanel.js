@@ -13,7 +13,7 @@ const {
   ButtonStyle,
 } = require('discord.js');
 
-const { getCharacter, updateCharacter } = require('../utils/characterStore.js');
+const { getCharacter, updateCharacter } = require('../db/characterStore.js');
 const { ARMAS_UNICAS }  = require('../data/uniqueWeapons.js');
 const { ARMAS_DORADAS } = require('../data/goldenWeapons.js');
 const { formatearMonedero, totalEnPC, pagar, MONEDAS } = require('../data/startingWealth.js');

@@ -10,12 +10,20 @@ const {
 } = require('discord.js');
 
 const { CLASSES }        = require('../data/classes.js');
-const { getCharacter, saveCharacter, updateCharacter } = require('../utils/characterStore.js');
+const { getCharacter, saveCharacter, updateCharacter } = require('../db/characterStore.js');
 const { isDM }           = require('../utils/isDM.js');
+
+function getClaseRobusta(className) {
+  if (!className) return null;
+  if (CLASSES[className]) return CLASSES[className];
+  const norm = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const found = Object.entries(CLASSES).find(([k]) => norm(k) === norm(className));
+  return found ? found[1] : null;
+}
 
 // ─── Notificar al jugador que puede elegir subclase ────────────────────────────
 async function notificarSubclaseDisponible(client, userId, char) {
-  const cls = CLASSES[char.class];
+  const cls = getClaseRobusta(char.class);
   if (!cls?.subclassLevel) return;
   if (char.level < cls.subclassLevel) return;
   if (char.subclass) return; // ya tiene subclase
@@ -63,7 +71,7 @@ async function cmdObtenerSubclase(interaction) {
   if (!char)
     return interaction.reply({ content: '❌ No tienes personaje. Usa `/crear-personaje` primero.', ephemeral: true });
 
-  const cls = CLASSES[char.class];
+  const cls = getClaseRobusta(char.class);
   if (!cls)
     return interaction.reply({ content: `❌ Clase desconocida: ${char.class}.`, ephemeral: true });
 
@@ -163,7 +171,7 @@ async function handleSubclaseInteraction(interaction) {
   }
 
   const subclaseElegida = interaction.values[0];
-  const cls = CLASSES[char.class] || {};
+  const cls = getClaseRobusta(char.class) || {};
   const subsRaw = cls.subclasses || {};
   const subData = Array.isArray(subsRaw) ? {} : (subsRaw[subclaseElegida] || {});
 
